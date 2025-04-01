@@ -1,8 +1,8 @@
 "use strict";
 import { Router } from "express";
-import auth_route from "../auth";
-import isAuth from "../middleware/auth/isAuth";
-import routes from "../routes/index";
+import auth_route from "../auth/index.js";
+import isAuth from "../middleware/auth/isAuth.js";
+import routes from "../routes/index.js";
 
 const controller = Router();
 

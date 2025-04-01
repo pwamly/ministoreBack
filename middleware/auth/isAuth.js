@@ -1,7 +1,6 @@
 "use strict";
 require("dotenv").config();
 const { verify } = require("jsonwebtoken");
-import { nb_user } from "../../models";
 
 module.exports = async(req, res, next) => {
     const auHeader = req.headers["authorization"];

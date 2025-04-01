@@ -2,7 +2,7 @@
 const { Model, Op } = require("sequelize");
 require("dotenv").config();
 
-module.exports = (sequelize, DataTypes) => {
+export default (sequelize, DataTypes) => {
     const vehiclehistory = sequelize.define(
         "vehiclehistory", {
             id: {

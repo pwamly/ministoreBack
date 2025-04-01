@@ -1,8 +1,8 @@
 "use strict";
 
 import { v4 as uuidv4 } from "uuid";
-import { nb_user } from "../../models/";
-import paginate from "../../afterwares/pagenate";
+import { nb_user } from "../../models/index.js";
+import paginate from "../../afterwares/pagenate.js";
 const { Model, Op, json } = require("sequelize");
 
 module.exports = async(req, res) => {

@@ -1,17 +1,15 @@
 "use strict";
 
 import { v4 as uuidv4 } from "uuid";
-import { vehiclereports } from "../../models";
+import { vehiclereports } from "../../models/index.js";
 const { Model, Op, json } = require("sequelize");
-import paginate from "../../afterwares/pagenate";
+import paginate from "../../afterwares/pagenate.js";
 
 module.exports = async(req, res) => {
     let where = {};
     const { q, pageInfo } = req.query;
     const { sortBy, sortOrder, page, limit } = pageInfo;
     if (q) {
-        console.log("ttttttttttttttttttttttt", q);
-
         where = {
             ...where,
             [Op.or]: {

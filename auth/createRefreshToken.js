@@ -1,8 +1,9 @@
 "use strict";
 
-import { sign } from "jsonwebtoken";
+import pkg from 'jsonwebtoken';
+const { sign } = pkg;
 
-module.exports = async(credetentials, db) => {
+export default  async(credetentials, db) => {
     const { id } = credetentials;
     const nb_user = db.nb_user || db;
 

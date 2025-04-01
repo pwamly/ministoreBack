@@ -50,4 +50,5 @@ Object.keys(db).forEach((modelName) => {
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
 
+// CommonJS export
 module.exports = db;

@@ -1,10 +1,10 @@
 "use strict";
 
 import { Router } from "express";
-import getUsers from "./user";
-import paginator from "../../middleware/reports/paginator";
-import isAdmin from "../../middleware/auth/isAdmin";
-import { nb_user } from "../../models/";
+import getUsers from "./user.js";
+import paginator from "../../middleware/reports/paginator.js";
+import isAdmin from "../../middleware/auth/isAdmin.js";
+import { nb_user } from "../../models/index.js";
 const user = Router();
 
 user.get("/", paginator, getUsers);

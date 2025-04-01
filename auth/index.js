@@ -2,16 +2,15 @@
 
 import { Router } from "express";
 require("dotenv").config();
-import db from "../models";
-import isAdmin from "../middleware/auth/isAdmin";
-import isAuth from "../middleware/auth/isAuth";
-import register from "./register";
-import editprofile from "./editprofile";
-import login from "./login";
-import logout from "./logout";
-import revokeRefreshToken from "./revokeRefreshToken";
-import resetPassword from "./resetPassword";
-import forgotPassword from "./forgotPassword";
+import isAdmin from "../middleware/auth/isAdmin.js";
+import isAuth from "../middleware/auth/isAuth.js";
+import register from "./register.js";
+import editprofile from "./editprofile.js";
+import login from "./login.js";
+import logout from "./logout.js";
+import revokeRefreshToken from "./revokeRefreshToken.js";
+import resetPassword from "./resetPassword.js";
+import forgotPassword from "./forgotPassword.js";
 
 const auth_route = Router();
 auth_route.post("/login", login);

@@ -1,14 +1,14 @@
 "use strict";
 
 import { Router } from "express";
-import { vehiclereports, vehiclehistory } from "../../models";
-import allreports from "./allreports";
-import history from "./history";
-import dashboarddata from "./dashboarddata";
-import isAdmin from "../../middleware/auth/isAdmin";
-import reportByid from "./reportByid";
-import inspectReport from "./inspectreport";
-import paginator from "../../middleware/reports/paginator";
+import { vehiclereports, vehiclehistory } from "../../models/index.js";
+import allreports from "./allreports.js";
+import history from "./history.js";
+import dashboarddata from "./dashboarddata.js";
+import isAdmin from "../../middleware/auth/isAdmin.js";
+import reportByid from "./reportByid.js";
+import inspectReport from "./inspectreport.js";
+import paginator from "../../middleware/reports/paginator.js";
 
 const reports = Router();
 

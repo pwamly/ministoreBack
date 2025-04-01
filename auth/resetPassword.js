@@ -1,5 +1,5 @@
 "use strict";
-import db from "../models";
+import db from "../models/index.js";
 const { nb_user } = db;
 const { verify } = require("jsonwebtoken");
 import { hash } from "bcrypt";

@@ -1,7 +1,7 @@
 "use strict";
 
-import { nb_user } from "../models";
-import {} from "./revokeRefreshToken";
+import { nb_user } from "../models/index.js";
+import {} from "./revokeRefreshToken.js";
 import { verify } from "jsonwebtoken";
 module.exports = async(req, res) => {
     const { token } = req.body;

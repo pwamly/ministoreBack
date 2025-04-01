@@ -1,10 +1,10 @@
 "use strict";
 require("dotenv").config();
 import express from "express";
-import controller from "./controller";
+import controller from "./controller/index.js";
 import bodyParser from "body-parser";
 import cookieParser from "cookie-parser";
-import refreshtoken from "./auth/refreshtoken";
+import refreshtoken from "./auth/refreshtoken.js";
 import cors from "cors";
 const app = express();
 const port = process.env.PORT;

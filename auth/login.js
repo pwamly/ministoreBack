@@ -1,7 +1,7 @@
 "use strict";
 
-import { nb_user } from "../models";
-import sendRefreshToken from "./sendRefreshToken";
+import { nb_user } from "../models/index.js";
+import sendRefreshToken from "./sendRefreshToken.js";
 
 module.exports = async(req, res) => {
     try {

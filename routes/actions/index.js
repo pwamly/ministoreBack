@@ -1,9 +1,8 @@
 "use strict";
 
 import { Router } from "express";
-import { nb_user } from "../../models";
-import editvehicle from "./editvehicle";
-import register from "./register";
+import editvehicle from "./editvehicle.js";
+import register from "./register.js";
 const action = Router();
 
 action.post("/registervehicle", register);

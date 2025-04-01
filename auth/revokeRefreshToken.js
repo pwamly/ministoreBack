@@ -1,8 +1,8 @@
 "use strict";
-import db from "../models";
+import db from "../models/index.js";
 const { nb_user } = db;
 
-module.exports = async(req, res) => {
+export default async(req, res) => {
     try {
         const { id } = req.body;
         let { token_version } = await nb_user.findOne({ where: { id: id } });

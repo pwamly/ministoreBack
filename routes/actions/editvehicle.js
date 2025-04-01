@@ -1,8 +1,8 @@
 "use strict";
 
 import { v4 as uuidv4 } from "uuid";
-import { vehiclereports } from "../../models";
-import savehistory from "./savehistory";
+import { vehiclereports } from "../../models/index.js";
+import savehistory from "./savehistory.js";
 const { Model, Op } = require("sequelize");
 
 module.exports = async(req, res) => {

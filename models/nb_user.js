@@ -1,11 +1,15 @@
 "use strict";
-const { Model, Op } = require("sequelize");
-require("dotenv").config();
+import { Model, Op } from "sequelize";
+import dotenv from "dotenv";
 import { hash, compare } from "bcrypt";
-import { sign } from "jsonwebtoken";
-import createRereshToken from "../auth/createRefreshToken";
+import pkg from "jsonwebtoken";
+import createRefreshToken from "../auth/createRefreshToken.js";
 
-module.exports = (sequelize, DataTypes) => {
+dotenv.config();
+
+const { sign } = pkg;
+
+export default (sequelize, DataTypes) => {
     const nb_user = sequelize.define(
         "nb_user", {
             id: {
@@ -24,7 +28,6 @@ module.exports = (sequelize, DataTypes) => {
             token_version: { type: DataTypes.INTEGER(255), allowNull: true },
             recoveryCode: { type: DataTypes.TEXT, allowNull: true },
             userRole: { type: DataTypes.STRING, allowNull: true },
-            userRole: { type: DataTypes.STRING, allowNull: true },
             signature: { type: DataTypes.STRING, allowNull: false },
         }, {
             tableName: "nb_user",
@@ -40,20 +43,21 @@ module.exports = (sequelize, DataTypes) => {
             },
         }
     );
+
     nb_user.prototype.getFullName = function() {
         return (
             this.getDataValue("first_name") + " " + this.getDataValue("last_name")
         );
     };
 
-    nb_user.beforeCreate(function(attrs) {
-        return new Promise((resolve, reject) => {
-            hash(attrs.password, 12, (err, encrypted) => {
-                if (err) return reject(err);
-                attrs.password = encrypted;
-                resolve(attrs);
-            });
-        });
+    nb_user.beforeCreate(async (attrs) => {
+        try {
+            const encrypted = await hash(attrs.password, 12);
+            attrs.password = encrypted;
+            return attrs;
+        } catch (err) {
+            throw new Error('Error hashing password');
+        }
     });
 
     nb_user.validateAndGet = async function(username, password) {
@@ -65,53 +69,53 @@ module.exports = (sequelize, DataTypes) => {
                 raw: true,
             });
 
-            if (!user) throw new Error("Account not exists!");
-            if (user) {
-                const match = await compare(password, user.password);
-                if (match) {
-                    const {
-                        id,
-                        first_name,
-                        last_name,
-                        username,
-                        email,
-                        token_version,
-                        userRole,
-                        phone,
-                    } = user;
-                    const profile = {
-                        id,
-                        first_name,
-                        last_name,
-                        username,
-                        email,
-                        userRole,
-                        phone,
-                    };
+            if (!user) throw new Error("Account does not exist!");
+            
+            const match = await compare(password, user.password);
+            if (match) {
+                const {
+                    id,
+                    first_name,
+                    last_name,
+                    username,
+                    email,
+                    token_version,
+                    userRole,
+                    phone,
+                } = user;
 
-                    const access_token = sign(profile, process.env.ACCESSTOKEN_SECRETE, {
-                        expiresIn: "15h",
-                    });
-                    const refresh_token = await createRereshToken({ id, token_version },
-                        nb_user
-                    );
-                    if (refresh_token) {
-                        return {
-                            profile,
-                            access_token,
-                            refresh_token,
-                        };
-                    }
-                } else {
-                    throw new Error("Wrong password!");
+                const profile = {
+                    id,
+                    first_name,
+                    last_name,
+                    username,
+                    email,
+                    userRole,
+                    phone,
+                };
+
+                const access_token = sign(profile, process.env.ACCESSTOKEN_SECRETE, {
+                    expiresIn: "15h",  // Consider shortening this for better security
+                });
+                const refresh_token = await createRefreshToken({ id, token_version }, nb_user);
+
+                if (refresh_token) {
+                    return {
+                        profile,
+                        access_token,
+                        refresh_token,
+                    };
                 }
+            } else {
+                throw new Error("Wrong password!");
             }
+
             return null;
         } catch (err) {
             console.log(err);
-            // console.error(err);
             throw err;
         }
     };
+
     return nb_user;
 };

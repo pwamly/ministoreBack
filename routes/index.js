@@ -1,13 +1,11 @@
 "use strict";
 
 import { Router } from "express";
-import isAdmin from "../middleware/auth/isAdmin";
-import isAuth from "../middleware/auth/isAuth";
-import profile from "./profile";
-import users from "./users/";
-import actions from "./actions";
-import reports from "./reports";
-import paginator from "../middleware/reports/paginator";
+import isAdmin from "../middleware/auth/isAdmin.js";
+import profile from "./profile/index.js";
+import users from "./users/index.js";
+import actions from "./actions/index.js";
+import reports from "./reports/index.js";
 const api = Router();
 
 api.use("/profile", profile);

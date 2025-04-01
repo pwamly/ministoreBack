@@ -1,8 +1,8 @@
 "use strict";
 
 import { v4 as uuidv4 } from "uuid";
-import { vehiclereports, nb_user } from "../../models";
-import paginate from "../../afterwares/pagenate";
+import { vehiclereports, nb_user } from "../../models/index.js";
+import paginate from "../../afterwares/pagenate.js";
 const { Model, Op } = require("sequelize");
 import moment from "moment";
 

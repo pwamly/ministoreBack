@@ -1,12 +1,11 @@
 "use strict";
 
 require("dotenv").config();
-import { nb_user } from "../models";
+import { nb_user,db } from "../models/index.js";
 import { verify } from "jsonwebtoken";
-import createAcessToken from "./createAcessToken";
-import createRereshToken from "../auth/createRefreshToken";
-import sendRefreshToken from "./sendRefreshToken";
-import db from "../models";
+import createAcessToken from "./createAcessToken.js";
+import createRereshToken from "../auth/createRefreshToken.js";
+import sendRefreshToken from "./sendRefreshToken.js";
 
 module.exports = async(req, res) => {
     const { jto: token } = req.cookies;

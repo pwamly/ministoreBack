@@ -1,5 +1,5 @@
 "use strict";
-import { Model, Op } from "sequelize";
+import {  Op } from "sequelize";
 import dotenv from "dotenv";
 import { hash, compare } from "bcrypt";
 import pkg from "jsonwebtoken";

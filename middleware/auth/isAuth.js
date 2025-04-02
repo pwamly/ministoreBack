@@ -2,7 +2,7 @@
 require("dotenv").config();
 const { verify } = require("jsonwebtoken");
 
-module.exports = async(req, res, next) => {
+export default async(req, res, next) => {
     const auHeader = req.headers["authorization"];
     const token = auHeader && auHeader.split(" ")[1];
     if (!token) {

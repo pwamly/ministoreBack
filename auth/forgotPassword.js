@@ -2,9 +2,10 @@
 import db from "../models/index.js";
 const { nb_user } = db;
 const { Model, Op } = require("sequelize");
-import { sign } from "jsonwebtoken";
+import pkg from 'jsonwebtoken';
+const { sign } = pkg;
 
-module.exports = async(req, res) => {
+export default async(req, res) => {
     const { email, phone } = req.body;
     if (email) {
         try {

@@ -1,6 +1,6 @@
 "use strict";
 
-module.exports = (req, res, next) => {
+export default (req, res, next) => {
     const { userRole } = req.payload;
     if (userRole == "admin") {
         next();

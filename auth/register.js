@@ -2,7 +2,7 @@
 
 const Op = require("sequelize").Op;
 import { v4 as uuidv4 } from "uuid";
-import { nb_user } from "../models/index.js";
+import nb_user  from "../models/nb_user.js";
 
 module.exports = async(req, res) => {
     try {

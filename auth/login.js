@@ -1,9 +1,9 @@
 "use strict";
 
-import { nb_user } from "../models/index.js";
+import nb_user  from "../models/nb_user.js";
 import sendRefreshToken from "./sendRefreshToken.js";
 
-module.exports = async(req, res) => {
+export default async(req, res) => {
     try {
         const { username, password } = req.body;
         const Token = await nb_user.validateAndGet(username, password);

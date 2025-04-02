@@ -1,6 +1,8 @@
 "use strict";
-require("dotenv").config();
-const { verify } = require("jsonwebtoken");
+import dotenv from "dotenv";  // ES Module import
+import pkg from 'jsonwebtoken';
+const { verify } = pkg;
+dotenv.config();  // Load environment variables from .env file
 
 export default async(req, res, next) => {
     const auHeader = req.headers["authorization"];

@@ -1,8 +1,8 @@
 "use strict";
 
-const Op = require("sequelize").Op;
+import { Op } from "sequelize";  // Import 'Op' from sequelize using ES module syntax
 import { v4 as uuidv4 } from "uuid";
-import nb_user  from "../models/nb_user.js";
+import nb_user from "../models/nb_user.js";  // Import nb_user model
 
 export default async(req, res) => {
     try {

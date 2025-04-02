@@ -9,4 +9,4 @@ const controller = Router();
 controller.use("/auth", auth_route);
 controller.use("/api", isAuth, routes);
 
-module.exports = controller;
+export default controller;

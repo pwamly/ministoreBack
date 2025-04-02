@@ -1,6 +1,7 @@
 "use strict";
-const { Model, Op } = require("sequelize");
-require("dotenv").config();
+import { Op,Model } from "sequelize";  // Import 'Op' from sequelize using ES module syntax
+import dotenv from "dotenv";  // ES Module import
+dotenv.config();  // Load environment variables from .env file
 
 export default (sequelize, DataTypes) => {
     const vehiclereports = sequelize.define(

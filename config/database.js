@@ -1,6 +1,6 @@
-const { getString } = require("../utils/env");
+import { getString } from "../utils/env.js";  // Use ES module import syntax
 
-module.exports = {
+export default {
     development: {
         username: getString("DEV_DB_USERNAME"),
         password: getString("DEV_DB_PASSWORD"),

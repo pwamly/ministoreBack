@@ -2,12 +2,13 @@
 
 require("dotenv").config();
 import { nb_user,db } from "../models/index.js";
-import { verify } from "jsonwebtoken";
+import pkg from 'jsonwebtoken';
 import createAcessToken from "./createAcessToken.js";
 import createRereshToken from "../auth/createRefreshToken.js";
 import sendRefreshToken from "./sendRefreshToken.js";
+const { verify } = pkg;
 
-module.exports = async(req, res) => {
+export default async(req, res) => {
     const { jto: token } = req.cookies;
 
     if (!token) {

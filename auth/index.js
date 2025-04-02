@@ -21,4 +21,4 @@ auth_route.post("/revokeAccount", isAdmin, revokeRefreshToken);
 auth_route.post("/forgot-password", forgotPassword);
 auth_route.post("/reset-password", resetPassword);
 
-module.exports = auth_route;
+export default auth_route;

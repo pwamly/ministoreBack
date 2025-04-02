@@ -5,18 +5,18 @@
  * @param {string} [defaultValue] - default value if variable name does not exist
  * @returns {string} returns value under the variable.
  */
-exports.getString = (variable, defaultVal = null) =>
+export const getString = (variable, defaultVal = null) =>
     process.env[variable] || defaultVal;
 
 /**
- * Get interger value from environment variables
+ * Get integer value from environment variables
  *
  * @param {string} variable - name of the variable
  * @param {string} [defaultValue] - default value if variable does not exist
  * @param {number} returned value if variable is found and is integer. Otherwise
  *        the function will return `NaN`
  */
-exports.getInt = (variable, defaultVal = NaN) =>
+export const getInt = (variable, defaultVal = NaN) =>
     1 * process.env[variable] || defaultVal;
 
 /**
@@ -27,7 +27,7 @@ exports.getInt = (variable, defaultVal = NaN) =>
  * @param {number} returned value if variable is found and a float. Otherwise
  *        the function will return `NaN`
  */
-exports.getFloat = (variable, defaultVal = NaN) =>
+export const getFloat = (variable, defaultVal = NaN) =>
     parseFloat(process.env[variable]) || defaultVal;
 
 /**
@@ -35,7 +35,7 @@ exports.getFloat = (variable, defaultVal = NaN) =>
  *
  * @returns {boolean}
  */
-exports.isDev = () => /development/i.test(exports.getString("NODE_ENV"));
+export const isDev = () => /development/i.test(getString("NODE_ENV"));
 
 /** Returns true if we're in test mode */
-exports.isTest = () => /test/i.test(exports.getString("NODE_ENV"));
+export const isTest = () => /test/i.test(getString("NODE_ENV"));

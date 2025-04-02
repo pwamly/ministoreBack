@@ -1,6 +1,6 @@
 "use strict";
 
-function paginate({
+export default function paginate({
     totalCount,
     currentPage = 1,
     pageSize = 10,
@@ -67,4 +67,3 @@ function paginate({
     };
 }
 
-module.exports = paginate;

@@ -4,7 +4,7 @@ import { Router } from "express";
 import getUsers from "./user.js";
 import paginator from "../../middleware/reports/paginator.js";
 import isAdmin from "../../middleware/auth/isAdmin.js";
-import { nb_user } from "../../models/index.js";
+import nb_user  from "../../models/nb_user.js";
 const user = Router();
 
 user.get("/", paginator, getUsers);

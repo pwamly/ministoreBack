@@ -5,7 +5,7 @@ import {} from "./revokeRefreshToken.js";
 import pkg from 'jsonwebtoken';
 const { verify } = pkg;
 
-module.exports = async(req, res) => {
+export default async(req, res) => {
     const { token } = req.body;
     try {
         const payload = verify(token, process.env.ACCESSTOKEN_SECRETE);

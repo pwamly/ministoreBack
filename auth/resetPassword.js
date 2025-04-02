@@ -4,7 +4,7 @@ const { nb_user } = db;
 const { verify } = require("jsonwebtoken");
 import { hash } from "bcrypt";
 
-module.exports = async(req, res) => {
+export default async(req, res) => {
     const { email, code, newpassword: password } = req.body;
     console.log(email);
     if (email && code && password) {

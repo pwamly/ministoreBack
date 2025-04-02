@@ -1,14 +1,16 @@
 "use strict";
 
 import { v4 as uuidv4 } from "uuid";
-import { nb_user } from "../../models/index.js";
+import nb_user from "../../models/nb_user.js";
 import paginate from "../../afterwares/pagenate.js";
 const { Model, Op, json } = require("sequelize");
 
-module.exports = async(req, res) => {
-    const { q, pageInfo } = req.query;
-    const { sortBy, sortOrder, page, limit } = pageInfo;
+const getUsers = async (req, res) => {
+    const { q, pageInfo } = req.query;  // Destructure query parameters
+    const { sortBy, sortOrder, page, limit } = pageInfo;  // Destructure pagination parameters from pageInfo
+    
     try {
+        // Querying the nb_user table with pagination and sorting
         const { rows, count } = await nb_user.findAndCountAll({
             attributes: [
                 "first_name",
@@ -18,12 +20,22 @@ module.exports = async(req, res) => {
                 "userRole",
                 "phone",
             ],
+            where: q ? {
+                [Op.or]: [
+                    { first_name: { [Op.like]: `%${q}%` } },
+                    { last_name: { [Op.like]: `%${q}%` } },
+                    { username: { [Op.like]: `%${q}%` } },
+                    { email: { [Op.like]: `%${q}%` } }
+                ]
+            } : {},  // If there's a search query 'q', filter by relevant fields
+
             order: [
                 [sortBy, sortOrder]
             ],
-
-            raw: true,
+            raw: true,  // Ensures raw results from Sequelize
         });
+
+        // Pagination handling
         const data = paginate({
             totalCount: count,
             currentPage: page,
@@ -31,10 +43,13 @@ module.exports = async(req, res) => {
             data: rows,
         });
 
-        if (rows) {
-            return res.json(data);
-        }
+        // Return the paginated data
+        return res.json(data);
     } catch (error) {
-        console.log("error", error);
+        console.log("Error:", error);  // Log error for debugging
+        return res.status(500).json({ message: "An error occurred while fetching users." });
     }
 };
+
+// Default export
+export default getUsers;

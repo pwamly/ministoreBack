@@ -3,7 +3,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { vehiclehistory, nb_user } from "../../models/index.js";
 import paginate from "../../afterwares/pagenate.js";
-const { Model, Op } = require("sequelize");
+import { Model, Op } from "sequelize";
 import moment from "moment";
 
 export default async(req, res) => {

@@ -12,6 +12,7 @@ export default async(req, res) => {
 
         return res.json({ success: true, accessToken: access_token });
     } catch (error) {
+        console.log('>>>>>>>>>>>>>>>>>>>>>>>>',error)
         return res.status(401).json({ successful: false });
     }
 };

@@ -1,7 +1,8 @@
 "use strict";
 import {db} from "../models/index.js";
 const { nb_user } = db;
-const { verify } = require("jsonwebtoken");
+import pkg from 'jsonwebtoken';
+const { verify } = pkg;
 import { hash } from "bcrypt";
 
 export default async(req, res) => {

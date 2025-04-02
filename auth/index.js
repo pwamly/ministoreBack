@@ -1,7 +1,7 @@
 "use strict";
 
 import { Router } from "express";
-require("dotenv").config();
+import dotenv from "dotenv";  // ES Module import
 import isAdmin from "../middleware/auth/isAdmin.js";
 import isAuth from "../middleware/auth/isAuth.js";
 import register from "./register.js";
@@ -11,6 +11,8 @@ import logout from "./logout.js";
 import revokeRefreshToken from "./revokeRefreshToken.js";
 import resetPassword from "./resetPassword.js";
 import forgotPassword from "./forgotPassword.js";
+
+dotenv.config();
 
 const auth_route = Router();
 auth_route.post("/login", login);

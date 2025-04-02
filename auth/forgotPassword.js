@@ -1,7 +1,7 @@
 "use strict";
 import {db} from "../models/index.js";
 const { nb_user } = db;
-const { Model, Op } = require("sequelize");
+import { Model, Op } from "sequelize";
 import pkg from 'jsonwebtoken';
 const { sign } = pkg;
 

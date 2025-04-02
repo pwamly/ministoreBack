@@ -1,11 +1,11 @@
 "use strict";
-
-require("dotenv").config();
+import dotenv from "dotenv";
 import { nb_user,db } from "../models/index.js";
 import pkg from 'jsonwebtoken';
 import createAcessToken from "./createAcessToken.js";
 import createRereshToken from "../auth/createRefreshToken.js";
 import sendRefreshToken from "./sendRefreshToken.js";
+dotenv.config();
 const { verify } = pkg;
 
 export default async(req, res) => {

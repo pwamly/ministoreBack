@@ -14,7 +14,7 @@ export default async(req, res, next) => {
             .json({ data: { message: "No Authorization Header" } });
     }
 
-    var payload = await verify(
+    await verify(
         token,
         process.env.ACCESSTOKEN_SECRETE,
         (error, user) => {

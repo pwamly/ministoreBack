@@ -3,7 +3,7 @@
 import { v4 as uuidv4 } from "uuid";
 import nb_user from "../../models/nb_user.js";
 import paginate from "../../afterwares/pagenate.js";
-const { Model, Op, json } = require("sequelize");
+import { Model, Op, json } from "sequelize";
 
 const getUsers = async (req, res) => {
     const { q, pageInfo } = req.query;  // Destructure query parameters

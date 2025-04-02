@@ -2,7 +2,7 @@
 
 import { v4 as uuidv4 } from "uuid";
 import vehiclereports from "../../models/vehiclereports.js";
-const { Model, Op } = require("sequelize");
+import  { Model, Op } from "sequelize";
 
 export default async(req, res) => {
     const { id: inspectorID } = req.payload;

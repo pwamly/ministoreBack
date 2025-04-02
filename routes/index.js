@@ -15,4 +15,4 @@ api.use("/reports", reports);
 api.use("/inspect", users);
 api.use("/actions", actions);
 api.use("/users", users);
-module.exports = api;
+export default api;

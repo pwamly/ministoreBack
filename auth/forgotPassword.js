@@ -1,5 +1,5 @@
 "use strict";
-import db from "../models/index.js";
+import {db} from "../models/index.js";
 const { nb_user } = db;
 const { Model, Op } = require("sequelize");
 import pkg from 'jsonwebtoken';

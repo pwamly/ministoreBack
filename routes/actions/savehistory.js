@@ -1,7 +1,7 @@
 "use strict";
 
 import { v4 as uuidv4 } from "uuid";
-import { vehiclehistory } from "../../models/index.js";
+import vehiclehistory  from "../../models/vehiclehistory.js";
 const { Model, Op } = require("sequelize");
 
 const isValidDate = (strDate) => {
@@ -12,7 +12,7 @@ const isValidDate = (strDate) => {
     return false;
 };
 
-module.exports = async(oldreport) => {
+export default  async(oldreport) => {
     const date = new Date();
     let {
         id: regId,

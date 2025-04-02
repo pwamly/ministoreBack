@@ -4,6 +4,9 @@ const fs = require("fs");
 const path = require("path");
 const Sequelize = require("sequelize");
 import nb_user from './nb_user.js'
+import vehiclehistory from './vehiclehistory.js';
+import vehiclereports from './vehiclereports.js';
+
 
 const dotenv = require("dotenv");
 dotenv.config();
@@ -52,6 +55,5 @@ db.sequelize = sequelize;
 db.Sequelize = Sequelize;
 
 // CommonJS export
-module.exports = db;
+export { nb_user,vehiclereports,vehiclehistory,db};
 
-export default nb_user;

@@ -15,4 +15,4 @@ action.post("/bulkdeletevehicle/", async(req, res) => {
     res.json({});
 });
 
-module.exports = action;
+export default action;

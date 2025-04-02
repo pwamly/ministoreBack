@@ -22,4 +22,4 @@ profile.get("/:id", async(req, res) => {
     res.json({ fname, lname, username, email, signature, userRole, phone });
 });
 
-module.exports = profile;
+export default profile;

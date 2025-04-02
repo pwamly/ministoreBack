@@ -5,7 +5,7 @@ import { vehiclereports, nb_user } from "../../models/index.js";
 const { Model, Op, json } = require("sequelize");
 import moment from "moment";
 
-module.exports = async(req, res) => {
+export default async(req, res) => {
     let where = {};
 
     const { q, day, status } = req.query;

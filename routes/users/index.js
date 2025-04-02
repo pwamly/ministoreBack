@@ -32,4 +32,4 @@ user.delete("/:id", isAdmin, async(req, res) => {
     }
 });
 
-module.exports = user;
+export default user;

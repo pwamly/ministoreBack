@@ -61,4 +61,4 @@ reports.delete("/deletehistory/:id", isAdmin, async(req, res) => {
         });
     }
 });
-module.exports = reports;
+export default reports;

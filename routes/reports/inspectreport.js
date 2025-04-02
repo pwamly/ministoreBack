@@ -5,7 +5,7 @@ import { vehiclereports } from "../../models/index.js";
 const { Model, Op, json } = require("sequelize");
 import paginate from "../../afterwares/pagenate.js";
 
-module.exports = async(req, res) => {
+export default async(req, res) => {
     let where = {};
     const { q, pageInfo } = req.query;
     const { sortBy, sortOrder, page, limit } = pageInfo;
@@ -40,7 +40,6 @@ module.exports = async(req, res) => {
 
             return res.json(data);
         } catch (error) {
-            console.log("zzzzzzzzzzzzzzzzzzzzzz", error);
         }
 
         return;

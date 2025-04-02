@@ -2,12 +2,12 @@
 
 // const { isInt } = require("../utils");
 
-module.exports = (req, res, next) => {
+const paginator = (req, res, next) => {
     const {
         page = 1,
-            pageSize = 10,
-            sortBy = "createdAt",
-            sortOrder = "desc",
+        pageSize = 10,
+        sortBy = "createdAt",
+        sortOrder = "desc",
     } = req.query;
     let pageInfo = { page, pageSize, sortBy, sortOrder };
 
@@ -22,19 +22,20 @@ module.exports = (req, res, next) => {
             },
         });
     }
-    // console.log(req.query);
+
     pageInfo.pageSize = req.query.limit || pageInfo.pageSize;
     pageInfo.page = req.query.page || pageInfo.page;
 
-    //.. if the page if from ui will be true otherwise false
     pageInfo.pageStatus = req.query.page ? true : false;
-    // Compute offset and limit
-    pageInfo = {...pageInfo };
-    pageInfo.offset =
-        (parseInt(pageInfo.page, 10) - 1) * parseInt(pageInfo.pageSize);
+
+    pageInfo = { ...pageInfo };
+    pageInfo.offset = (parseInt(pageInfo.page, 10) - 1) * parseInt(pageInfo.pageSize);
     pageInfo.limit = pageInfo.offset + parseInt(pageInfo.pageSize);
 
     req.query.pageInfo = pageInfo;
 
     next();
 };
+
+// Default export
+export default paginator;

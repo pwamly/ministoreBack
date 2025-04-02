@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from "uuid";
 import { vehiclereports } from "../../models/index.js";
 const { Model, Op, json } = require("sequelize");
 
-module.exports = async function allreports(req, res) {
+ async function allreports(req, res) {
     try {
         const reports = await vehiclereports.findAll();
 
@@ -18,7 +18,7 @@ module.exports = async function allreports(req, res) {
 
     return;
 };
-module.exports = async function reportById(req, res) {
+ async function reportById(req, res) {
     try {
         const reports = await vehiclereports.findAll({ where: { vihecleRegno } });
         if (reports) {
@@ -32,7 +32,7 @@ module.exports = async function reportById(req, res) {
     return;
 };
 
-module.exports = async function inspect(req, res) {
+ async function inspect(req, res) {
     const { q, pageInfo } = req.query;
     const { sortBy, sortOrder } = pageInfo;
     if (q) {
@@ -62,4 +62,4 @@ module.exports = async function inspect(req, res) {
         return;
     }
 };
-// module.exports = { allreports, reportById, inspect };
+module.exports = { allreports, reportById, inspect };

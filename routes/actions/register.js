@@ -1,10 +1,10 @@
 "use strict";
 
 import { v4 as uuidv4 } from "uuid";
-import { vehiclereports } from "../../models/index.js";
+import vehiclereports from "../../models/vehiclereports.js";
 const { Model, Op } = require("sequelize");
 
-module.exports = async(req, res) => {
+export default async(req, res) => {
     const { id: inspectorID } = req.payload;
 
     const date = new Date();

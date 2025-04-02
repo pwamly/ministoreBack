@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from "uuid";
 import { vehiclereports } from "../../models/index.js";
 const { Model, Op, json } = require("sequelize");
 
-module.exports = async(req, res) => {
+export default async(req, res) => {
     try {
         const reports = await vehiclereports.findAll({ where: { vihecleRegno } });
         if (reports) {

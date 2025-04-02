@@ -6,7 +6,7 @@ import paginate from "../../afterwares/pagenate.js";
 const { Model, Op } = require("sequelize");
 import moment from "moment";
 
-module.exports = async(req, res) => {
+export default async(req, res) => {
     let where = {};
 
     const { q, pageInfo, day, status } = req.query;

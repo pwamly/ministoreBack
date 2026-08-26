@@ -1,7 +1,7 @@
 "use strict";
 
 import { v4 as uuidv4 } from "uuid";
-import nb_user from "../../models/nb_user.js";
+import nb_user from "../../models/min_user.js";
 import paginate from "../../afterwares/pagenate.js";
 import { Model, Op, json } from "sequelize";
 

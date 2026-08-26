@@ -2,7 +2,7 @@
 
 import { Op } from "sequelize";  // Import 'Op' from sequelize using ES module syntax
 import { v4 as uuidv4 } from "uuid";
-import nb_user from "../models/nb_user.js";  // Import nb_user model
+import nb_user from "../models/min_user.js";  // Import nb_user model
 
 export default async(req, res) => {
     try {

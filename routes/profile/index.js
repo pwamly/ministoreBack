@@ -1,7 +1,7 @@
 "use strict";
 
 import { Router } from "express";
-import nb_user  from "../../models/nb_user.js";
+import nb_user  from "../../models/min_user.js";
 
 const profile = Router();
 

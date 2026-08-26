@@ -1,6 +1,6 @@
 "use strict";
 
-import nb_user  from "../models/nb_user.js";
+import nb_user  from "../models/min_user.js";
 import sendRefreshToken from "./sendRefreshToken.js";
 
 export default async(req, res) => {

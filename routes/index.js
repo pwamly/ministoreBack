@@ -2,17 +2,10 @@
 
 import { Router } from "express";
 import isAdmin from "../middleware/auth/isAdmin.js";
-import profile from "./profile/index.js";
-import users from "./users/index.js";
-import actions from "./actions/index.js";
-import reports from "./reports/index.js";
+import regProduct from "./actions/registerProduct.js";
+// import users from "./users";
+
 const api = Router();
 
-api.use("/profile", profile);
-api.use("/team", isAdmin, users);
-api.use("/profile", users);
-api.use("/reports", reports);
-api.use("/inspect", users);
-api.use("/actions", actions);
-api.use("/users", users);
+api.use("/product-reg", regProduct);
 export default api;

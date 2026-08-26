@@ -1,18 +1,40 @@
 "use strict";
 
-import nb_user  from "../models/min_user.js";
-import sendRefreshToken from "./sendRefreshToken.js";
+import db from "../models/index.js";
 
-export default async(req, res) => {
+const { min_user } = db;
+
+export default async (req, res) => {
     try {
         const { username, password } = req.body;
-        const Token = await nb_user.validateAndGet(username, password);
-        const { access_token, refresh_token } = Token;
-        sendRefreshToken(res, refresh_token);
 
-        return res.json({ success: true, accessToken: access_token });
+        console.log('trrrrrrrrrrrrrrr',username,password)
+
+        console.log("LOGIN MODEL:", min_user.name);
+        console.log(
+            "LOGIN validateAndGet:",
+            typeof min_user.validateAndGet
+        );
+
+        const result = await min_user.validateAndGet(
+            username,
+            password
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: "Login successful",
+            data: result,
+        });
     } catch (error) {
-        console.log('>>>>>>>>>>>>>>>>>>>>>>>>',error)
-        return res.status(401).json({ successful: false });
+        console.error(
+            ">>>>>>>>>>>>>>>>>>>>>>>>",
+            error
+        );
+
+        return res.status(401).json({
+            success: false,
+            message: error.message || "Login failed",
+        });
     }
 };

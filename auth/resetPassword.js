@@ -1,6 +1,6 @@
 "use strict";
 import {db} from "../models/index.js";
-const { nb_user } = db;
+const { min_user } = db;
 import pkg from 'jsonwebtoken';
 const { verify } = pkg;
 import { hash } from "bcrypt";
@@ -10,7 +10,7 @@ export default async(req, res) => {
     console.log(email);
     if (email && code && password) {
         // check if user code is valid for that email or mobile no
-        const rcode = await nb_user.findOne({
+        const rcode = await min_user.findOne({
             where: { email },
             raw: true,
         });
@@ -36,7 +36,7 @@ export default async(req, res) => {
                         hash(password, 12, (err, encrypted) => {
                             if (err) return;
 
-                            const savePassword = nb_user.update({ password: encrypted }, {
+                            const savePassword = min_user.update({ password: encrypted }, {
                                 where: { email },
                             });
                             if (savePassword) {

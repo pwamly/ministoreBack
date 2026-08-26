@@ -2,7 +2,7 @@
 
 import { Op } from "sequelize";  // Import 'Op' from sequelize using ES module synta
 import { v4 as uuidv4 } from "uuid";
-import nb_user  from "../models/min_user.js";
+import min_user  from "../models/min_user.js";
 
 
 export default async(req, res) => {
@@ -25,7 +25,7 @@ export default async(req, res) => {
             signature,
         };
 
-        const updated = await nb_user.update({...bodyPayload }, { where: { id } });
+        const updated = await min_user.update({...bodyPayload }, { where: { id } });
 
         if (updated == 1) {
             console.log("user created", updated, id);

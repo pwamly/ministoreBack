@@ -1,6 +1,6 @@
 "use strict";
 import dotenv from "dotenv";
-import { nb_user,db } from "../models/index.js";
+import { db } from "../models/index.js";
 import pkg from 'jsonwebtoken';
 import createAcessToken from "./createAcessToken.js";
 import createRereshToken from "../auth/createRefreshToken.js";
@@ -25,7 +25,7 @@ export default async(req, res) => {
             return res.status(401).json({ successful: false, AccessToken: "" });
     }
 
-    const user = await nb_user.findOne({ where: { id: payload.id } });
+    const user = await min_user.findOne({ where: { id: payload.id } });
 
     if (!user) {
         console.log("token not exist in db");

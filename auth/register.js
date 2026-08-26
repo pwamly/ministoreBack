@@ -2,7 +2,7 @@
 
 import { Op } from "sequelize";  // Import 'Op' from sequelize using ES module syntax
 import { v4 as uuidv4 } from "uuid";
-import nb_user from "../models/min_user.js";  // Import nb_user model
+import min_user from "../models/min_user.js";  // Import min_user model
 
 export default async(req, res) => {
     try {
@@ -28,7 +28,7 @@ export default async(req, res) => {
             userRole: "user",
         };
 
-        const [user, created] = await nb_user.findOrCreate({
+        const [user, created] = await min_user.findOrCreate({
             where: {
                 [Op.or]: { username, email },
             },

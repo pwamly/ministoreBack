@@ -1,7 +1,7 @@
 "use strict";
 
 import { v4 as uuidv4 } from "uuid";
-import { vehiclereports, nb_user } from "../../models/index.js";
+import { vehiclereports, min_user } from "../../models/index.js";
 import { Model, Op, json } from "sequelize";
 import moment from "moment";
 
@@ -9,7 +9,7 @@ export default async(req, res) => {
     let where = {};
 
     const { q, day, status } = req.query;
-    const team = await nb_user.findAll();
+    const team = await min_user.findAll();
 
     try {
         if (q) {

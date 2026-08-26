@@ -4,7 +4,7 @@ import { Router } from "express";
 import getUsers from "./user.js";
 import paginator from "../../middleware/reports/paginator.js";
 import isAdmin from "../../middleware/auth/isAdmin.js";
-import nb_user  from "../../models/min_user.js";
+import min_user  from "../../models/min_user.js";
 const user = Router();
 
 user.get("/", paginator, getUsers);
@@ -12,7 +12,7 @@ user.get("/", paginator, getUsers);
 user.delete("/:id", isAdmin, async(req, res) => {
     const { id } = req.params;
     try {
-        const response = await nb_user.destroy({ where: { id } });
+        const response = await min_user.destroy({ where: { id } });
         if (response == 1) {
             return res.json({
                 successful: true,

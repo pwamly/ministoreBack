@@ -1,6 +1,6 @@
 "use strict";
 import {db} from "../models/index.js";
-const { nb_user } = db;
+const { min_user } = db;
 import { Model, Op } from "sequelize";
 import pkg from 'jsonwebtoken';
 const { sign } = pkg;
@@ -10,7 +10,7 @@ export default async(req, res) => {
     if (email) {
         try {
             // check if user exist
-            const user = await nb_user.findOne({
+            const user = await min_user.findOne({
                 where: {
                     [Op.or]: [{ email }],
                 },
@@ -28,7 +28,7 @@ export default async(req, res) => {
 
                 // save code to db
                 try {
-                    const savedcode = await nb_user.update({ recoveryCode }, {
+                    const savedcode = await min_user.update({ recoveryCode }, {
                         where: { email },
                     });
                     console.log("is it successful", savedcode);

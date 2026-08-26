@@ -5,7 +5,7 @@ const { sign } = pkg;
 
 export default  async(credetentials, db) => {
     const { id } = credetentials;
-    const nb_user = db.nb_user || db;
+    const min_user = db.min_user || db;
 
     const refresh_token = sign({...credetentials },
         process.env.REFRESHTOKEN_SECRETE, {
@@ -13,7 +13,7 @@ export default  async(credetentials, db) => {
         }
     );
     try {
-        const tokensaved = await nb_user.update({ refresh_token }, {
+        const tokensaved = await min_user.update({ refresh_token }, {
             where: { id: id },
         });
         if (tokensaved) {

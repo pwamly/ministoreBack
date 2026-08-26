@@ -1,7 +1,7 @@
 "use strict";
 
 import { v4 as uuidv4 } from "uuid";
-import { vehiclehistory, nb_user } from "../../models/index.js";
+import { vehiclehistory, min_user } from "../../models/index.js";
 import paginate from "../../afterwares/pagenate.js";
 import { Model, Op } from "sequelize";
 import moment from "moment";
@@ -11,7 +11,7 @@ export default async(req, res) => {
 
     const { q, pageInfo, day, status } = req.query;
     const { sortBy, sortOrder, page, limit, offset } = pageInfo;
-    const team = await nb_user.findAll();
+    const team = await min_user.findAll();
 
     const isValidDate = (strDate) => {
         let myDatestr = new Date(strDate);

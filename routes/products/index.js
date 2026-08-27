@@ -4,7 +4,7 @@ import { Router } from "express";
 import register from "./registerProduct.js";
 const action = Router();
 
-action.post("/registervehicle", register);
+action.post("/registerProduct", register);
 action.put("/editvehicle/:id", editvehicle);
 action.delete("/deletevehicle/:id", async(req, res) => {
     res.json({});

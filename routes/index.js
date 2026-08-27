@@ -2,7 +2,7 @@
 
 import { Router } from "express";
 import isAdmin from "../middleware/auth/isAdmin.js";
-import regProduct from "./actions/registerProduct.js";
+import regProduct from "./products/registerProduct.js";
 // import users from "./users";
 
 const api = Router();

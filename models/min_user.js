@@ -3,12 +3,13 @@
 import { Op } from "sequelize";
 import dotenv from "dotenv";
 import { hash, compare } from "bcrypt";
-import pkg from "jsonwebtoken";
+import jwt from "jsonwebtoken";
+
 import createRefreshToken from "../auth/createRefreshToken.js";
 
 dotenv.config();
 
-const { sign } = pkg;
+const { sign } = jwt;
 
 export default (sequelize, DataTypes) => {
     const min_user = sequelize.define(
@@ -60,7 +61,7 @@ export default (sequelize, DataTypes) => {
 
             token_version: {
                 type: DataTypes.INTEGER,
-                allowNull: true,
+                allowNull: false,
                 defaultValue: 0,
             },
 
@@ -72,6 +73,7 @@ export default (sequelize, DataTypes) => {
             userRole: {
                 type: DataTypes.STRING,
                 allowNull: true,
+                defaultValue: "user",
             },
 
             signature: {
@@ -95,156 +97,207 @@ export default (sequelize, DataTypes) => {
         }
     );
 
-    /*
-     * Instance method
-     */
+    // =====================================================
+    // INSTANCE METHOD
+    // =====================================================
+
     min_user.prototype.getFullName = function () {
         return `${this.getDataValue("first_name")} ${this.getDataValue(
             "last_name"
         )}`;
     };
 
-    /*
-     * Hash password before creating user
-     */
+    // =====================================================
+    // HASH PASSWORD ON CREATE
+    // =====================================================
+
     min_user.beforeCreate(async (user) => {
+        if (!user.password) {
+            return;
+        }
+
         try {
-            if (user.password) {
-                user.password = await hash(user.password, 12);
-            }
+            user.password = await hash(
+                user.password,
+                12
+            );
         } catch (error) {
-            console.error("Password hashing error:", error);
-            throw new Error("Error hashing password");
+            console.error(
+                "Password hashing error:",
+                error
+            );
+
+            throw new Error(
+                "Error hashing password"
+            );
         }
     });
 
-    /*
-     * Hash password if it is changed
-     */
+    // =====================================================
+    // HASH PASSWORD ON UPDATE
+    // =====================================================
+
     min_user.beforeUpdate(async (user) => {
+        if (!user.changed("password")) {
+            return;
+        }
+
         try {
-            if (user.changed("password")) {
-                user.password = await hash(user.password, 12);
-            }
+            user.password = await hash(
+                user.password,
+                12
+            );
         } catch (error) {
-            console.error("Password hashing error:", error);
-            throw new Error("Error hashing password");
+            console.error(
+                "Password hashing error:",
+                error
+            );
+
+            throw new Error(
+                "Error hashing password"
+            );
         }
     });
 
-    /*
-     * Static login method
-     */
-    min_user.validateAndGet = async function (username, password) {
-        try {
-            if (!username || !password) {
-                throw new Error("Username/email and password are required!");
-            }
+    // =====================================================
+    // LOGIN
+    // =====================================================
 
-            /*
-             * Find user using either username or email
-             */
-            const user = await min_user.findOne({
-                where: {
-                    [Op.or]: [
-                        {
-                            username: username,
-                        },
-                        {
-                            email: username,
-                        },
-                    ],
-                },
-                raw: true,
-            });
+    min_user.validateAndGet = async function (
+        username,
+        password
+    ) {
+        if (!username || !password) {
+            throw new Error(
+                "Username/email and password are required!"
+            );
+        }
 
-            if (!user) {
-                throw new Error("Account does not exist!");
-            }
+        // -------------------------------------------------
+        // Find user
+        // -------------------------------------------------
 
-            /*
-             * Compare password
-             */
-            const match = await compare(password, user.password);
+        const user = await min_user.findOne({
+            where: {
+                [Op.or]: [
+                    {
+                        username,
+                    },
+                    {
+                        email: username,
+                    },
+                ],
+            },
 
-            if (!match) {
-                throw new Error("Wrong password!");
-            }
+            raw: true,
+        });
 
-            /*
-             * Get required user information
-             */
-            const {
-                id,
-                first_name,
-                last_name,
-                username: userUsername,
-                email,
-                token_version,
-                userRole,
-                phone,
-            } = user;
+        if (!user) {
+            throw new Error(
+                "Account does not exist!"
+            );
+        }
 
-            /*
-             * User profile returned to client
-             */
-            const profile = {
-                id,
-                first_name,
-                last_name,
-                username: userUsername,
-                email,
-                userRole,
-                phone,
-            };
+        // -------------------------------------------------
+        // Check password
+        // -------------------------------------------------
 
-            /*
-             * Check JWT secret
-             */
-            if (!process.env.ACCESSTOKEN_SECRETE) {
-                throw new Error(
-                    "ACCESSTOKEN_SECRETE is not configured in .env"
-                );
-            }
+        const passwordMatch =
+            await compare(
+                password,
+                user.password
+            );
 
-            /*
-             * Create access token
-             */
-            const access_token = sign(
+        if (!passwordMatch) {
+            throw new Error(
+                "Wrong password!"
+            );
+        }
+
+        // -------------------------------------------------
+        // Profile
+        // -------------------------------------------------
+
+        const profile = {
+            id: user.id,
+
+            first_name:
+                user.first_name,
+
+            last_name:
+                user.last_name,
+
+            username:
+                user.username,
+
+            email:
+                user.email,
+
+            userRole:
+                user.userRole,
+
+            phone:
+                user.phone,
+        };
+
+        // -------------------------------------------------
+        // Access token secret
+        // -------------------------------------------------
+
+        if (
+            !process.env
+                .ACCESSTOKEN_SECRETE
+        ) {
+            throw new Error(
+                "ACCESSTOKEN_SECRETE is not configured"
+            );
+        }
+
+        // -------------------------------------------------
+        // Create access token
+        // -------------------------------------------------
+
+        const access_token =
+            sign(
                 profile,
-                process.env.ACCESSTOKEN_SECRETE,
+                process.env
+                    .ACCESSTOKEN_SECRETE,
                 {
-                    expiresIn: "15h",
+                    expiresIn: "30m",
                 }
             );
 
-            /*
-             * Create refresh token
-             */
-            const refresh_token = await createRefreshToken(
+        // -------------------------------------------------
+        // Create refresh token
+        // -------------------------------------------------
+
+        const refresh_token =
+            await createRefreshToken(
                 {
-                    id,
-                    token_version: token_version ?? 0,
+                    id: user.id,
+
+                    token_version:
+                        user.token_version ??
+                        0,
                 },
+
                 min_user
             );
 
-            if (!refresh_token) {
-                throw new Error("Failed to create refresh token");
-            }
-
-            /*
-             * Return login result
-             */
-            return {
-                profile,
-                access_token,
-                refresh_token,
-            };
-        } catch (error) {
-            console.error("validateAndGet error:", error);
-            throw error;
+        if (!refresh_token) {
+            throw new Error(
+                "Failed to create refresh token"
+            );
         }
+
+        // -------------------------------------------------
+        // Return internally
+        // -------------------------------------------------
+
+        return {
+            profile,
+            access_token
+        };
     };
 
     return min_user;

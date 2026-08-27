@@ -8,88 +8,211 @@ import Sequelize from "sequelize";
 
 const { DataTypes } = Sequelize;
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __filename =
+    fileURLToPath(import.meta.url);
 
-const basename = path.basename(__filename);
-const env = process.env.NODE_ENV || "development";
+const __dirname =
+    path.dirname(__filename);
 
-const config = (
-    await import("../config/config.json", {
-        with: { type: "json" },
-    })
-).default[env];
+const basename =
+    path.basename(__filename);
+
+const env =
+    process.env.NODE_ENV || "development";
+
+const config =
+    (
+        await import("../config/config.json", {
+            with: {
+                type: "json",
+            },
+        })
+    ).default[env];
 
 const db = {};
 
 let sequelize;
 
+// =====================================================
+// DATABASE
+// =====================================================
+
 if (config.use_env_variable) {
-    sequelize = new Sequelize.Sequelize(
-        process.env[config.use_env_variable],
-        config
-    );
+
+    sequelize =
+        new Sequelize.Sequelize(
+            process.env[
+                config.use_env_variable
+            ],
+            config
+        );
+
 } else {
-    sequelize = new Sequelize.Sequelize(
-        config.database,
-        config.username,
-        config.password,
-        config
-    );
+
+    sequelize =
+        new Sequelize.Sequelize(
+            config.database,
+            config.username,
+            config.password,
+            config
+        );
 }
 
-/*
- * Load all models
- */
+// =====================================================
+// LOAD MODELS
+// =====================================================
+
 const files = fs
     .readdirSync(__dirname)
     .filter((file) => {
+
         return (
             file.indexOf(".") !== 0 &&
             file !== basename &&
-            file.slice(-3) === ".js" &&
-            file.indexOf(".test.js") === -1
+            file.endsWith(".js") &&
+            !file.endsWith(".test.js")
         );
+
     });
 
 for (const file of files) {
-    const filePath = path.join(__dirname, file);
 
-    const module = await import(filePath);
-
-    const modelFactory = module.default;
-
-    if (typeof modelFactory === "function") {
-        const model = modelFactory(sequelize, DataTypes);
-
-        db[model.name] = model;
+    try {
 
         console.log(
-            `Model loaded: ${model.name}`,
-            typeof model.validateAndGet === "function"
-                ? "validateAndGet ✓"
-                : ""
+            `Loading model: ${file}`
         );
+
+        const module =
+            await import(
+                path.join(__dirname, file)
+            );
+
+        const modelFactory =
+            module.default;
+
+        if (
+            typeof modelFactory !==
+            "function"
+        ) {
+            console.log(
+                `Skipping ${file}`
+            );
+
+            continue;
+        }
+
+        const model =
+            modelFactory(
+                sequelize,
+                DataTypes
+            );
+
+        db[model.name] =
+            model;
+
+        console.log(
+            `Model loaded: ${model.name}`
+        );
+
+    } catch (error) {
+
+        console.error(
+            `FAILED TO LOAD ${file}`
+        );
+
+        console.error(error);
+
+        process.exit(1);
     }
 }
 
-/*
- * Setup associations
- */
-Object.keys(db).forEach((modelName) => {
+// =====================================================
+// CHECK MODELS
+// =====================================================
+
+console.log(
+    "\nLoaded models:"
+);
+
+console.log(
+    Object.keys(db)
+);
+
+// =====================================================
+// ASSOCIATIONS
+// =====================================================
+
+console.log(
+    "\nSetting up associations..."
+);
+
+for (
+    const modelName of Object.keys(db)
+) {
+
+    const model =
+        db[modelName];
+
     if (
-        db[modelName] &&
-        typeof db[modelName].associate === "function"
+        typeof model.associate ===
+        "function"
     ) {
-        db[modelName].associate(db);
+
+        try {
+
+            console.log(
+                `Associating: ${modelName}`
+            );
+
+            model.associate(db);
+
+        } catch (error) {
+
+            console.error(
+                `Association failed: ${modelName}`
+            );
+
+            console.error(error);
+
+            process.exit(1);
+        }
     }
-});
+}
 
-/*
- * Sequelize references
- */
-db.sequelize = sequelize;
-db.Sequelize = Sequelize;
+// =====================================================
+// DATABASE
+// =====================================================
 
-export { db };
+db.sequelize =
+    sequelize;
+
+db.Sequelize =
+    Sequelize;
+
+// =====================================================
+// DEBUG ASSOCIATIONS
+// =====================================================
+
+console.log(
+    "\nProduct associations:"
+);
+
+if (db.product) {
+
+    console.log(
+        Object.keys(
+            db.product.associations
+        )
+    );
+}
+
+// =====================================================
+// EXPORT
+// =====================================================
+
+export {
+    db
+};
+
 export default db;

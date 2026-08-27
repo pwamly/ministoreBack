@@ -1,10 +1,7 @@
 "use strict";
 
-import dotenv from "dotenv";
-
-dotenv.config();
-
 export default (sequelize, DataTypes) => {
+
     const brand = sequelize.define(
         "brand",
         {
@@ -12,7 +9,6 @@ export default (sequelize, DataTypes) => {
                 type: DataTypes.UUID,
                 allowNull: false,
                 defaultValue: DataTypes.UUIDV4,
-                unique: true,
                 primaryKey: true,
             },
 
@@ -41,11 +37,23 @@ export default (sequelize, DataTypes) => {
         {
             tableName: "brands",
             modelName: "brand",
-            underscored: false,
             timestamps: true,
-            scopes: {},
+            underscored: false,
         }
     );
+
+    brand.associate = (models) => {
+
+        brand.hasMany(
+            models.product,
+            {
+                foreignKey: "brandId",
+                sourceKey: "id",
+                as: "products",
+            }
+        );
+
+    };
 
     return brand;
 };

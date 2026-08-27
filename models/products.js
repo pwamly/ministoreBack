@@ -1,9 +1,5 @@
 "use strict";
 
-import dotenv from "dotenv";
-
-dotenv.config();
-
 export default (sequelize, DataTypes) => {
     const product = sequelize.define(
         "product",
@@ -12,7 +8,6 @@ export default (sequelize, DataTypes) => {
                 type: DataTypes.UUID,
                 allowNull: false,
                 defaultValue: DataTypes.UUIDV4,
-                unique: true,
                 primaryKey: true,
             },
 
@@ -81,11 +76,68 @@ export default (sequelize, DataTypes) => {
         {
             tableName: "products",
             modelName: "product",
-            underscored: false,
             timestamps: true,
-            scopes: {},
+            underscored: false,
         }
     );
+
+    // =====================================================
+    // ASSOCIATIONS
+    // =====================================================
+
+    product.associate = (models) => {
+
+        product.belongsTo(models.brand, {
+            foreignKey: "brandId",
+            targetKey: "id",
+            as: "brand",
+        });
+
+        product.belongsTo(models.category, {
+            foreignKey: "categoryId",
+            targetKey: "id",
+            as: "category",
+        });
+
+        product.belongsTo(models.unit, {
+            foreignKey: "unitId",
+            targetKey: "id",
+            as: "unit",
+        });
+
+        product.belongsTo(models.taxgroup, {
+            foreignKey: "taxGroupId",
+            targetKey: "id",
+            as: "taxGroup",
+        });
+
+        product.hasOne(
+            models.productdetails,
+            {
+                foreignKey: "productId",
+                sourceKey: "id",
+                as: "details",
+            }
+        );
+
+        product.hasMany(
+            models.productbarcode,
+            {
+                foreignKey: "productId",
+                sourceKey: "id",
+                as: "barcodes",
+            }
+        );
+
+        product.hasOne(
+            models.productregulatory,
+            {
+                foreignKey: "productId",
+                sourceKey: "id",
+                as: "regulatory",
+            }
+        );
+    };
 
     return product;
 };

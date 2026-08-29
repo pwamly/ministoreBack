@@ -6,6 +6,8 @@ import { fileURLToPath } from "url";
 import process from "process";
 import Sequelize from "sequelize";
 
+import databaseConfig from "../config/database.js";
+
 const { DataTypes } = Sequelize;
 
 const __filename =
@@ -21,17 +23,12 @@ const env =
     process.env.NODE_ENV || "development";
 
 const config =
-    (
-        await import("../config/config.json", {
-            with: {
-                type: "json",
-            },
-        })
-    ).default[env];
+    databaseConfig[env];
 
 const db = {};
 
 let sequelize;
+
 
 // =====================================================
 // DATABASE

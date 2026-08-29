@@ -414,7 +414,7 @@ export default async (req, res) => {
                 "Failed to fetch products",
 
             error:
-                error.message,
+                "Failed to fetch products",
 
         });
     }

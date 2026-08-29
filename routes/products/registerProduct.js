@@ -450,7 +450,7 @@ export default async (req, res) => {
                 "Failed to register product",
 
             error:
-                error.message,
+                "Failed to register product",
         });
     }
 };

@@ -106,7 +106,7 @@ export default async (req, res) => {
 
         return res.status(500).json({
             success: false,
-            message: error.message || "Failed to create user",
+            message: "Failed to create user",
         });
     }
 };

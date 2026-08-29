@@ -34,7 +34,7 @@ export default async (req, res) => {
 
         return res.status(401).json({
             success: false,
-            message: error.message || "Login failed",
+            message: "Login failed",
         });
     }
 };

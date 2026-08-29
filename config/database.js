@@ -1,4 +1,4 @@
-import { getString } from "../utils/env.js";  // Use ES module import syntax
+import { getString } from "../utils/env.js";
 
 export default {
     development: {
@@ -9,6 +9,7 @@ export default {
         dialect: getString("DEV_DB_DIALECT"),
         logging: false,
     },
+
     test: {
         username: getString("CI_DB_USERNAME"),
         password: getString("CI_DB_PASSWORD"),
@@ -17,6 +18,7 @@ export default {
         dialect: getString("CI_DB_DIALECT"),
         logging: false,
     },
+
     production: {
         username: getString("DB_USERNAME"),
         password: getString("DB_PASSWORD"),

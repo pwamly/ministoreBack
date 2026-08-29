@@ -1,6 +1,10 @@
 import dotenv from "dotenv";
+
 dotenv.config();
 
-const env = process.env;
-
-module.exports.get = (attr, defaultValue = null) => env[attr] || defaultValue;
+export const getString = (
+    attr,
+    defaultValue = null
+) => {
+    return process.env[attr] || defaultValue;
+};

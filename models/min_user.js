@@ -296,7 +296,8 @@ export default (sequelize, DataTypes) => {
 
         return {
             profile,
-            access_token
+            access_token,
+            refresh_token
         };
     };
 

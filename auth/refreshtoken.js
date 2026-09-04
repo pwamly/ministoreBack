@@ -1,6 +1,8 @@
 "use strict";
 import dotenv from "dotenv";
 import { db } from "../models/index.js";
+const { min_user } = db;
+
 import pkg from 'jsonwebtoken';
 import createAcessToken from "./createAcessToken.js";
 import createRereshToken from "../auth/createRefreshToken.js";

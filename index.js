@@ -26,13 +26,9 @@ const PORT = process.env.PORT || 5000;
 // =====================================================
 
 const options = {
-  key: fs.readFileSync(
-    path.join(__dirname, "cert", "server.key")
-  ),
+  key: fs.readFileSync(path.join(__dirname, "cert", "server.key")),
 
-  cert: fs.readFileSync(
-    path.join(__dirname, "cert", "server.crt")
-  ),
+  cert: fs.readFileSync(path.join(__dirname, "cert", "server.crt")),
 };
 
 // =====================================================
@@ -42,7 +38,10 @@ const options = {
 const allowedOrigins = [
   "https://192.168.1.173:3000",
   "http://192.168.1.173:3000",
-
+  "https://localhost:3000",
+  "http://localhost:3000",
+  "https://192.168.1.173:3000",
+  "http://192.168.1.173:3000",
   "https://localhost:3000",
   "http://localhost:3000",
 ];
@@ -68,14 +67,7 @@ app.use(
 
     credentials: true,
 
-    methods: [
-      "GET",
-      "POST",
-      "PUT",
-      "PATCH",
-      "DELETE",
-      "OPTIONS",
-    ],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 
     allowedHeaders: [
       "Content-Type",
@@ -84,7 +76,7 @@ app.use(
       "Origin",
       "X-Requested-With",
     ],
-  })
+  }),
 );
 
 // =====================================================
@@ -92,14 +84,9 @@ app.use(
 // =====================================================
 
 app.use((req, res, next) => {
-  console.log(
-    `${new Date().toISOString()} ${req.method} ${req.originalUrl}`
-  );
+  console.log(`${new Date().toISOString()} ${req.method} ${req.originalUrl}`);
 
-  console.log(
-    "Origin:",
-    req.headers.origin || "none"
-  );
+  console.log("Origin:", req.headers.origin || "none");
 
   next();
 });
@@ -113,7 +100,7 @@ app.use(bodyParser.json());
 app.use(
   bodyParser.urlencoded({
     extended: true,
-  })
+  }),
 );
 
 // =====================================================
@@ -178,19 +165,13 @@ app.use((err, req, res, next) => {
 // HTTPS SERVER
 // =====================================================
 
-https
-  .createServer(options, app)
-  .listen(PORT, "0.0.0.0", () => {
-    console.log("");
-    console.log("=================================");
-    console.log("HTTPS SERVER RUNNING");
-    console.log("=================================");
-    console.log(
-      `https://192.168.1.173:${PORT}`
-    );
-    console.log(
-      `https://192.168.1.173:${PORT}/health`
-    );
-    console.log("=================================");
-    console.log("");
-  });
+https.createServer(options, app).listen(PORT, "0.0.0.0", () => {
+  console.log("");
+  console.log("=================================");
+  console.log("HTTPS SERVER RUNNING");
+  console.log("=================================");
+  console.log(`https://192.168.1.173:${PORT}`);
+  console.log(`https://192.168.1.173:${PORT}/health`);
+  console.log("=================================");
+  console.log("");
+});

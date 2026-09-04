@@ -44,6 +44,7 @@ const allowedOrigins = [
   "http://192.168.1.173:3000",
   "https://localhost:3000",
   "http://localhost:3000",
+  "https://necbot.store"
 ];
 
 app.use(

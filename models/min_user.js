@@ -263,7 +263,7 @@ export default (sequelize, DataTypes) => {
                 process.env
                     .ACCESSTOKEN_SECRETE,
                 {
-                    expiresIn: "3m",
+                    expiresIn: "300m",
                 }
             );
 

@@ -14,7 +14,7 @@ export default async (req, res) => {
     const result = await min_user.validateAndGet(username, password);
 
 
-    const { access_token, refresh_token } = result;
+    const { access_token, refresh_token,profile } = result;
 
     // IMPORTANT: send HttpOnly refresh-token cookie
 
@@ -24,6 +24,7 @@ export default async (req, res) => {
       success: true,
       message: "Login successful",
       accessToken: access_token,
+      profile: profile,
     });
   } catch (error) {
     console.error("LOGIN ERROR:", error);

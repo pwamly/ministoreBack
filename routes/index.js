@@ -6,12 +6,14 @@ import regProduct from "./products/registerProduct.js";
 import products from "./products/getProducts.js";
 import regSales from "./sales/regSales.js";
 import sales from "./sales/sales.js";
+import editProduct from "./products/editProduct.js";
 // import users from "./users";
 
 const api = Router();
 
 api.post("/product-reg", regProduct);
 api.get("/getProducts", products);
+api.put("/products/:id", editProduct);
 
 // sales
 api.post("/reg-sales", regSales);

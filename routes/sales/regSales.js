@@ -17,11 +17,13 @@ export default async (req, res) => {
         const {
             invoiceNumber,
             customerName,
+            customerMobile,
             userId,
             paymentMethod,
             subtotal,
             tax,
             total,
+            paidNow,
             cashGiven,
             changeAmount,
             status,
@@ -112,8 +114,20 @@ export default async (req, res) => {
                 .trim()
                 .toLowerCase();
 
-        // Tax can still come from the client.
-        // Subtotal and total will be calculated by the server.
+        const cleanCustomerName =
+            customerName !== undefined &&
+            customerName !== null &&
+            String(customerName).trim() !== ""
+                ? String(customerName).trim()
+                : null;
+
+        const cleanCustomerMobile =
+            customerMobile !== undefined &&
+            customerMobile !== null &&
+            String(customerMobile).trim() !== ""
+                ? String(customerMobile).trim()
+                : null;
+
         const cleanTax =
             tax !== undefined &&
             tax !== null &&
@@ -133,6 +147,13 @@ export default async (req, res) => {
             total !== null &&
             total !== ""
                 ? Number(total)
+                : null;
+
+        const cleanPaidNow =
+            paidNow !== undefined &&
+            paidNow !== null &&
+            paidNow !== ""
+                ? Number(paidNow)
                 : null;
 
         const cleanCashGiven =
@@ -190,6 +211,28 @@ export default async (req, res) => {
             });
         }
 
+        // =====================================================
+        // VALIDATE PAID NOW
+        // =====================================================
+
+        if (
+            cleanPaidNow !== null &&
+            (
+                !Number.isFinite(cleanPaidNow) ||
+                cleanPaidNow < 0
+            )
+        ) {
+            return res.status(400).json({
+                successful: false,
+                message:
+                    "Paid now must be a valid number greater than or equal to 0",
+            });
+        }
+
+        // =====================================================
+        // VALIDATE CHANGE AMOUNT
+        // =====================================================
+
         if (
             suppliedChangeAmount !== null &&
             (
@@ -214,6 +257,7 @@ export default async (req, res) => {
             "cash",
             "card",
             "mobile",
+            "loan",
         ];
 
         if (
@@ -224,7 +268,23 @@ export default async (req, res) => {
             return res.status(400).json({
                 successful: false,
                 message:
-                    "Invalid payment method. Allowed: cash, card, mobile",
+                    "Invalid payment method. Allowed: cash, card, mobile, loan",
+            });
+        }
+
+        // =====================================================
+        // LOAN CUSTOMER VALIDATION
+        // =====================================================
+
+        if (
+            cleanPaymentMethod === "loan" &&
+            !cleanCustomerName &&
+            !cleanCustomerMobile
+        ) {
+            return res.status(400).json({
+                successful: false,
+                message:
+                    "Customer name or customer mobile is required for loan sales",
             });
         }
 
@@ -254,6 +314,7 @@ export default async (req, res) => {
         // =====================================================
 
         for (const item of items) {
+
             if (!item.productId) {
                 return res.status(400).json({
                     successful: false,
@@ -316,7 +377,7 @@ export default async (req, res) => {
                     const saleId = uuidv4();
 
                     // =================================================
-                    // CALCULATE SALE TOTALS FROM ITEMS
+                    // CALCULATE SALE TOTALS
                     // =================================================
 
                     let calculatedSubtotal = 0;
@@ -403,6 +464,7 @@ export default async (req, res) => {
                             item.subtotal !== null &&
                             item.subtotal !== ""
                         ) {
+
                             const suppliedItemSubtotal =
                                 Number(
                                     item.subtotal
@@ -431,9 +493,11 @@ export default async (req, res) => {
                         }
 
                         normalizedItems.push({
-                            id: uuidv4(),
+                            id:
+                                uuidv4(),
 
-                            saleId: saleId,
+                            saleId:
+                                saleId,
 
                             productId:
                                 item.productId,
@@ -528,12 +592,43 @@ export default async (req, res) => {
                     }
 
                     // =================================================
-                    // CALCULATE CHANGE
+                    // CALCULATE PAID NOW
                     // =================================================
 
-                    let calculatedChangeAmount = 0;
+                    let calculatedPaidNow = 0;
+
+                    // ---------------------------------------------
+                    // LOAN
+                    // ---------------------------------------------
 
                     if (
+                        cleanPaymentMethod === "loan"
+                    ) {
+
+                        // If omitted, a loan defaults to 0 paid now.
+                        calculatedPaidNow =
+                            cleanPaidNow !== null
+                                ? Number(
+                                    cleanPaidNow.toFixed(2)
+                                )
+                                : 0;
+
+                        // Cannot pay more than the full sale.
+                        if (
+                            calculatedPaidNow >
+                            calculatedTotal
+                        ) {
+                            throw new Error(
+                                `Paid now cannot be greater than the sale total. Total: ${calculatedTotal}, paid now: ${calculatedPaidNow}`
+                            );
+                        }
+                    }
+
+                    // ---------------------------------------------
+                    // CASH
+                    // ---------------------------------------------
+
+                    else if (
                         cleanPaymentMethod === "cash"
                     ) {
 
@@ -557,6 +652,54 @@ export default async (req, res) => {
                             );
                         }
 
+                        calculatedPaidNow =
+                            calculatedTotal;
+                    }
+
+                    // ---------------------------------------------
+                    // CARD / MOBILE
+                    // ---------------------------------------------
+
+                    else {
+
+                        // Card/mobile are full payments.
+                        calculatedPaidNow =
+                            calculatedTotal;
+                    }
+
+                    // =================================================
+                    // VALIDATE PAID NOW
+                    // =================================================
+
+                    if (
+                        calculatedPaidNow < 0 ||
+                        calculatedPaidNow >
+                        calculatedTotal
+                    ) {
+                        throw new Error(
+                            `Invalid paid now amount. Expected a value between 0 and ${calculatedTotal}`
+                        );
+                    }
+
+                    calculatedPaidNow =
+                        Number(
+                            calculatedPaidNow.toFixed(2)
+                        );
+
+                    // =================================================
+                    // CALCULATE CHANGE
+                    // =================================================
+
+                    let calculatedChangeAmount = 0;
+
+                    // ---------------------------------------------
+                    // CASH
+                    // ---------------------------------------------
+
+                    if (
+                        cleanPaymentMethod === "cash"
+                    ) {
+
                         calculatedChangeAmount =
                             Number(
                                 (
@@ -564,10 +707,16 @@ export default async (req, res) => {
                                     calculatedTotal
                                 ).toFixed(2)
                             );
+                    }
 
-                    } else {
+                    // ---------------------------------------------
+                    // NON-CASH
+                    // ---------------------------------------------
 
-                        // Card/mobile should not have cash given.
+                    else {
+
+                        // Card, mobile and loan must not contain
+                        // cash given.
                         if (
                             cleanCashGiven !== null &&
                             cleanCashGiven !== 0
@@ -597,6 +746,18 @@ export default async (req, res) => {
                     }
 
                     // =================================================
+                    // CALCULATE REMAINING BALANCE
+                    // =================================================
+
+                    const remainingBalance =
+                        Number(
+                            (
+                                calculatedTotal -
+                                calculatedPaidNow
+                            ).toFixed(2)
+                        );
+
+                    // =================================================
                     // CREATE SALE
                     // =================================================
 
@@ -610,11 +771,10 @@ export default async (req, res) => {
                                     cleanInvoiceNumber,
 
                                 customerName:
-                                    customerName
-                                        ? String(
-                                            customerName
-                                        ).trim()
-                                        : null,
+                                    cleanCustomerName,
+
+                                customerMobile:
+                                    cleanCustomerMobile,
 
                                 userId:
                                     userId,
@@ -622,26 +782,26 @@ export default async (req, res) => {
                                 paymentMethod:
                                     cleanPaymentMethod,
 
-                                // IMPORTANT:
-                                // Use calculated subtotal.
                                 subtotal:
                                     calculatedSubtotal,
 
                                 tax:
                                     cleanTax,
 
-                                // IMPORTANT:
-                                // Use calculated total.
+                                // Full sale amount.
+                                // Loan does NOT reduce this.
                                 total:
                                     calculatedTotal,
+
+                                // Actual amount paid now.
+                                paidNow:
+                                    calculatedPaidNow,
 
                                 cashGiven:
                                     cleanPaymentMethod === "cash"
                                         ? cleanCashGiven
                                         : null,
 
-                                // IMPORTANT:
-                                // Use calculated change.
                                 changeAmount:
                                     calculatedChangeAmount,
 
@@ -713,6 +873,12 @@ export default async (req, res) => {
 
                         calculatedTotal:
                             calculatedTotal,
+
+                        calculatedPaidNow:
+                            calculatedPaidNow,
+
+                        remainingBalance:
+                            remainingBalance,
                     };
                 }
             );
@@ -743,6 +909,9 @@ export default async (req, res) => {
                 customerName:
                     result.sale.customerName,
 
+                customerMobile:
+                    result.sale.customerMobile,
+
                 userId:
                     result.sale.userId,
 
@@ -759,9 +928,22 @@ export default async (req, res) => {
                         result.sale.tax
                     ),
 
+                // Full sale amount.
                 total:
                     Number(
                         result.calculatedTotal
+                    ),
+
+                // Amount paid immediately.
+                paidNow:
+                    Number(
+                        result.calculatedPaidNow
+                    ),
+
+                // Amount still owed.
+                remainingBalance:
+                    Number(
+                        result.remainingBalance
                     ),
 
                 totalQuantity:
@@ -923,6 +1105,10 @@ export default async (req, res) => {
             "Cash given is less than the sale total",
             "Cash given should only be provided",
             "Product not found",
+            "Paid now must be a valid number",
+            "Paid now cannot be greater than the sale total",
+            "Invalid paid now amount",
+            "Customer name or customer mobile is required for loan sales",
         ];
 
         const isValidationError =

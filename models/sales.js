@@ -22,11 +22,22 @@ export default (sequelize, DataTypes) => {
                 allowNull: true,
             },
 
+            // Required when paymentMethod = "loan"
+            customerMobile: {
+                type: DataTypes.STRING(30),
+                allowNull: true,
+            },
+
             userId: {
                 type: DataTypes.UUID,
                 allowNull: false,
             },
 
+            // Allowed:
+            // cash
+            // card
+            // mobile
+            // loan
             paymentMethod: {
                 type: DataTypes.STRING(30),
                 allowNull: false,
@@ -45,17 +56,34 @@ export default (sequelize, DataTypes) => {
                 defaultValue: 0,
             },
 
+            // Full cost of the sale.
+            // This remains the total even when the sale is a loan.
             total: {
                 type: DataTypes.DECIMAL(15, 2),
                 allowNull: false,
                 defaultValue: 0,
             },
 
+            // Amount paid at the time of the sale.
+            //
+            // Cash/Card/Mobile:
+            // normally equal to total.
+            //
+            // Loan:
+            // cashier can enter a partial amount.
+            paidNow: {
+                type: DataTypes.DECIMAL(15, 2),
+                allowNull: false,
+                defaultValue: 0,
+            },
+
+            // Used only for cash payments.
             cashGiven: {
                 type: DataTypes.DECIMAL(15, 2),
                 allowNull: true,
             },
 
+            // Used only for cash payments.
             changeAmount: {
                 type: DataTypes.DECIMAL(15, 2),
                 allowNull: false,

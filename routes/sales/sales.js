@@ -35,7 +35,15 @@ const isValidDateString = (value) => {
 const createStartOfDay = (dateString) => {
   const [year, month, day] = dateString.split("-").map(Number);
 
-  return new Date(year, month - 1, day, 0, 0, 0, 0);
+  return new Date(
+    year,
+    month - 1,
+    day,
+    0,
+    0,
+    0,
+    0
+  );
 };
 
 /**
@@ -44,7 +52,15 @@ const createStartOfDay = (dateString) => {
 const createEndOfDay = (dateString) => {
   const [year, month, day] = dateString.split("-").map(Number);
 
-  return new Date(year, month - 1, day, 23, 59, 59, 999);
+  return new Date(
+    year,
+    month - 1,
+    day,
+    23,
+    59,
+    59,
+    999
+  );
 };
 
 export default async (req, res) => {
@@ -54,11 +70,15 @@ export default async (req, res) => {
     // =====================================================
 
     if (!sales) {
-      throw new Error("Sales model is not initialized");
+      throw new Error(
+        "Sales model is not initialized"
+      );
     }
 
     if (!salesItems) {
-      throw new Error("Sales items model is not initialized");
+      throw new Error(
+        "Sales items model is not initialized"
+      );
     }
 
     // =====================================================
@@ -70,6 +90,8 @@ export default async (req, res) => {
       search,
       startDate,
       endDate,
+      paymentMethod,
+      status,
       page = 1,
       limit = 20,
     } = req.query;
@@ -78,7 +100,10 @@ export default async (req, res) => {
     // NORMALIZE
     // =====================================================
 
-    const cleanMode = String(mode).trim().toLowerCase();
+    const cleanMode =
+      String(mode)
+        .trim()
+        .toLowerCase();
 
     const cleanSearch =
       search !== undefined &&
@@ -87,14 +112,42 @@ export default async (req, res) => {
         ? String(search).trim()
         : null;
 
-    const cleanPage = Math.max(Number(page) || 1, 1);
+    const cleanPaymentMethod =
+      paymentMethod !== undefined &&
+      paymentMethod !== null &&
+      String(paymentMethod).trim() !== ""
+        ? String(paymentMethod)
+            .trim()
+            .toLowerCase()
+        : null;
 
-    const cleanLimit = Math.min(
-      Math.max(Number(limit) || 20, 1),
-      100
-    );
+    const cleanStatus =
+      status !== undefined &&
+      status !== null &&
+      String(status).trim() !== ""
+        ? String(status)
+            .trim()
+            .toLowerCase()
+        : null;
 
-    const offset = (cleanPage - 1) * cleanLimit;
+    const cleanPage =
+      Math.max(
+        Number(page) || 1,
+        1
+      );
+
+    const cleanLimit =
+      Math.min(
+        Math.max(
+          Number(limit) || 20,
+          1
+        ),
+        100
+      );
+
+    const offset =
+      (cleanPage - 1) *
+      cleanLimit;
 
     // =====================================================
     // NORMALIZE DATES
@@ -126,11 +179,41 @@ export default async (req, res) => {
       "yearly",
     ];
 
-    if (!allowedModes.includes(cleanMode)) {
+    if (
+      !allowedModes.includes(
+        cleanMode
+      )
+    ) {
       return res.status(400).json({
         successful: false,
+
         message:
           "Invalid mode. Allowed: all, today, weekly, monthly, yearly",
+      });
+    }
+
+    // =====================================================
+    // VALIDATE PAYMENT METHOD
+    // =====================================================
+
+    const allowedPaymentMethods = [
+      "cash",
+      "card",
+      "mobile",
+      "loan",
+    ];
+
+    if (
+      cleanPaymentMethod &&
+      !allowedPaymentMethods.includes(
+        cleanPaymentMethod
+      )
+    ) {
+      return res.status(400).json({
+        successful: false,
+
+        message:
+          "Invalid paymentMethod. Allowed: cash, card, mobile, loan",
       });
     }
 
@@ -138,21 +221,37 @@ export default async (req, res) => {
     // VALIDATE CUSTOM DATES
     // =====================================================
 
-    if (cleanStartDate && !isValidDateString(cleanStartDate)) {
+    if (
+      cleanStartDate &&
+      !isValidDateString(
+        cleanStartDate
+      )
+    ) {
       return res.status(400).json({
         successful: false,
+
         message:
           "Invalid startDate. Expected format: YYYY-MM-DD",
-        received: cleanStartDate,
+
+        received:
+          cleanStartDate,
       });
     }
 
-    if (cleanEndDate && !isValidDateString(cleanEndDate)) {
+    if (
+      cleanEndDate &&
+      !isValidDateString(
+        cleanEndDate
+      )
+    ) {
       return res.status(400).json({
         successful: false,
+
         message:
           "Invalid endDate. Expected format: YYYY-MM-DD",
-        received: cleanEndDate,
+
+        received:
+          cleanEndDate,
       });
     }
 
@@ -160,14 +259,26 @@ export default async (req, res) => {
     // VALIDATE DATE RANGE
     // =====================================================
 
-    if (cleanStartDate && cleanEndDate) {
-      const start = createStartOfDay(cleanStartDate);
-      const end = createEndOfDay(cleanEndDate);
+    if (
+      cleanStartDate &&
+      cleanEndDate
+    ) {
+      const start =
+        createStartOfDay(
+          cleanStartDate
+        );
+
+      const end =
+        createEndOfDay(
+          cleanEndDate
+        );
 
       if (start > end) {
         return res.status(400).json({
           successful: false,
-          message: "startDate cannot be after endDate",
+
+          message:
+            "startDate cannot be after endDate",
         });
       }
     }
@@ -187,40 +298,66 @@ export default async (req, res) => {
     /*
      * CUSTOM DATE RANGE
      *
-     * Custom startDate/endDate takes priority over mode.
+     * Custom startDate/endDate takes
+     * priority over mode.
      */
 
-    if (cleanStartDate || cleanEndDate) {
+    if (
+      cleanStartDate ||
+      cleanEndDate
+    ) {
       const dateFilter = {};
 
       if (cleanStartDate) {
         dateFilter[Op.gte] =
-          createStartOfDay(cleanStartDate);
+          createStartOfDay(
+            cleanStartDate
+          );
       }
 
       if (cleanEndDate) {
         dateFilter[Op.lte] =
-          createEndOfDay(cleanEndDate);
+          createEndOfDay(
+            cleanEndDate
+          );
       }
 
-      saleWhere.createdAt = dateFilter;
+      saleWhere.createdAt =
+        dateFilter;
     }
 
     /*
      * TODAY
      */
 
-    else if (cleanMode === "today") {
-      const start = new Date(now);
+    else if (
+      cleanMode === "today"
+    ) {
+      const start =
+        new Date(now);
 
-      start.setHours(0, 0, 0, 0);
+      start.setHours(
+        0,
+        0,
+        0,
+        0
+      );
 
-      const end = new Date(now);
+      const end =
+        new Date(now);
 
-      end.setHours(23, 59, 59, 999);
+      end.setHours(
+        23,
+        59,
+        59,
+        999
+      );
 
       saleWhere.createdAt = {
-        [Op.between]: [start, end],
+        [Op.between]: [
+          start,
+          end,
+        ],
       };
     }
 
@@ -230,25 +367,51 @@ export default async (req, res) => {
      * Monday -> Sunday
      */
 
-    else if (cleanMode === "weekly") {
-      const start = new Date(now);
+    else if (
+      cleanMode === "weekly"
+    ) {
+      const start =
+        new Date(now);
 
-      const day = start.getDay();
+      const day =
+        start.getDay();
 
-      const diff = day === 0 ? 6 : day - 1;
+      const diff =
+        day === 0
+          ? 6
+          : day - 1;
 
-      start.setDate(start.getDate() - diff);
+      start.setDate(
+        start.getDate() -
+          diff
+      );
 
-      start.setHours(0, 0, 0, 0);
+      start.setHours(
+        0,
+        0,
+        0,
+        0
+      );
 
-      const end = new Date(start);
+      const end =
+        new Date(start);
 
-      end.setDate(end.getDate() + 6);
+      end.setDate(
+        end.getDate() + 6
+      );
 
-      end.setHours(23, 59, 59, 999);
+      end.setHours(
+        23,
+        59,
+        59,
+        999
+      );
 
       saleWhere.createdAt = {
-        [Op.between]: [start, end],
+        [Op.between]: [
+          start,
+          end,
+        ],
       };
     }
 
@@ -256,29 +419,36 @@ export default async (req, res) => {
      * MONTHLY
      */
 
-    else if (cleanMode === "monthly") {
-      const start = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        1,
-        0,
-        0,
-        0,
-        0
-      );
+    else if (
+      cleanMode === "monthly"
+    ) {
+      const start =
+        new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          1,
+          0,
+          0,
+          0,
+          0
+        );
 
-      const end = new Date(
-        now.getFullYear(),
-        now.getMonth() + 1,
-        0,
-        23,
-        59,
-        59,
-        999
-      );
+      const end =
+        new Date(
+          now.getFullYear(),
+          now.getMonth() + 1,
+          0,
+          23,
+          59,
+          59,
+          999
+        );
 
       saleWhere.createdAt = {
-        [Op.between]: [start, end],
+        [Op.between]: [
+          start,
+          end,
+        ],
       };
     }
 
@@ -286,30 +456,55 @@ export default async (req, res) => {
      * YEARLY
      */
 
-    else if (cleanMode === "yearly") {
-      const start = new Date(
-        now.getFullYear(),
-        0,
-        1,
-        0,
-        0,
-        0,
-        0
-      );
+    else if (
+      cleanMode === "yearly"
+    ) {
+      const start =
+        new Date(
+          now.getFullYear(),
+          0,
+          1,
+          0,
+          0,
+          0,
+          0
+        );
 
-      const end = new Date(
-        now.getFullYear(),
-        11,
-        31,
-        23,
-        59,
-        59,
-        999
-      );
+      const end =
+        new Date(
+          now.getFullYear(),
+          11,
+          31,
+          23,
+          59,
+          59,
+          999
+        );
 
       saleWhere.createdAt = {
-        [Op.between]: [start, end],
+        [Op.between]: [
+          start,
+          end,
+        ],
       };
+    }
+
+    // =====================================================
+    // PAYMENT METHOD FILTER
+    // =====================================================
+
+    if (cleanPaymentMethod) {
+      saleWhere.paymentMethod =
+        cleanPaymentMethod;
+    }
+
+    // =====================================================
+    // STATUS FILTER
+    // =====================================================
+
+    if (cleanStatus) {
+      saleWhere.status =
+        cleanStatus;
     }
 
     // =====================================================
@@ -320,22 +515,32 @@ export default async (req, res) => {
       saleWhere[Op.or] = [
         {
           invoiceNumber: {
-            [Op.like]: `%${cleanSearch}%`,
+            [Op.like]:
+              `%${cleanSearch}%`,
           },
         },
         {
           customerName: {
-            [Op.like]: `%${cleanSearch}%`,
+            [Op.like]:
+              `%${cleanSearch}%`,
+          },
+        },
+        {
+          customerMobile: {
+            [Op.like]:
+              `%${cleanSearch}%`,
           },
         },
         {
           paymentMethod: {
-            [Op.like]: `%${cleanSearch}%`,
+            [Op.like]:
+              `%${cleanSearch}%`,
           },
         },
         {
           status: {
-            [Op.like]: `%${cleanSearch}%`,
+            [Op.like]:
+              `%${cleanSearch}%`,
           },
         },
       ];
@@ -345,201 +550,593 @@ export default async (req, res) => {
     // DEBUG
     // =====================================================
 
-    console.log("GET SALES QUERY:", {
-      mode: cleanMode,
-      search: cleanSearch,
-      startDate: cleanStartDate,
-      endDate: cleanEndDate,
-      page: cleanPage,
-      limit: cleanLimit,
-      saleWhere,
-    });
+    console.log(
+      "GET SALES QUERY:",
+      {
+        mode:
+          cleanMode,
+
+        search:
+          cleanSearch,
+
+        paymentMethod:
+          cleanPaymentMethod,
+
+        status:
+          cleanStatus,
+
+        startDate:
+          cleanStartDate,
+
+        endDate:
+          cleanEndDate,
+
+        page:
+          cleanPage,
+
+        limit:
+          cleanLimit,
+
+        saleWhere,
+      }
+    );
 
     // =====================================================
     // GET SALES
     // =====================================================
 
-    const { count, rows } = await sales.findAndCountAll({
-      where: saleWhere,
+    const {
+      count,
+      rows,
+    } =
+      await sales.findAndCountAll({
+        where:
+          saleWhere,
 
-      include: [
-        {
-          model: salesItems,
-          as: "items",
-          required: false,
-        },
-      ],
+        include: [
+          {
+            model:
+              salesItems,
 
-      order: [["createdAt", "DESC"]],
+            as:
+              "items",
 
-      limit: cleanLimit,
+            required:
+              false,
+          },
+        ],
 
-      offset,
+        order: [
+          [
+            "createdAt",
+            "DESC",
+          ],
+        ],
 
-      distinct: true,
-    });
+        limit:
+          cleanLimit,
+
+        offset,
+
+        distinct:
+          true,
+      });
 
     // =====================================================
     // FORMAT SALES
     // =====================================================
 
-    const formattedSales = rows.map((sale) => {
-      const items = sale.items || [];
+    const formattedSales =
+      rows.map((sale) => {
+        const items =
+          sale.items || [];
 
-      const totalProfit = items.reduce(
-        (total, item) =>
-          total + Number(item.profit || 0),
-        0
-      );
+        // ---------------------------------------------
+        // TOTAL PROFIT
+        // ---------------------------------------------
 
-      const totalQuantity = items.reduce(
-        (total, item) =>
-          total + Number(item.quantity || 0),
-        0
-      );
+        const totalProfit =
+          items.reduce(
+            (total, item) =>
+              total +
+              Number(
+                item.profit || 0
+              ),
+            0
+          );
 
-      return {
-        id: sale.id,
+        // ---------------------------------------------
+        // TOTAL QUANTITY
+        // ---------------------------------------------
 
-        invoiceNumber: sale.invoiceNumber,
+        const totalQuantity =
+          items.reduce(
+            (total, item) =>
+              total +
+              Number(
+                item.quantity || 0
+              ),
+            0
+          );
 
-        customerName: sale.customerName,
+        // ---------------------------------------------
+        // SALE AMOUNTS
+        // ---------------------------------------------
 
-        userId: sale.userId,
+        const saleTotal =
+          Number(
+            sale.total || 0
+          );
 
-        paymentMethod: sale.paymentMethod,
+        const salePaidNow =
+          Number(
+            sale.paidNow || 0
+          );
 
-        subtotal: Number(sale.subtotal || 0),
+        // ---------------------------------------------
+        // REMAINING BALANCE
+        //
+        // For loans:
+        //
+        // total - paidNow
+        //
+        // For normal sales this will normally
+        // be zero.
+        // ---------------------------------------------
 
-        tax: Number(sale.tax || 0),
+        const remainingBalance =
+          Number(
+            Math.max(
+              saleTotal -
+                salePaidNow,
+              0
+            ).toFixed(2)
+          );
 
-        total: Number(sale.total || 0),
+        // ---------------------------------------------
+        // LOAN STATUS
+        // ---------------------------------------------
 
-        cashGiven:
-          sale.cashGiven !== null &&
-          sale.cashGiven !== undefined
-            ? Number(sale.cashGiven)
-            : null,
+        let loanStatus =
+          null;
 
-        changeAmount: Number(
-          sale.changeAmount || 0
-        ),
+        if (
+          sale.paymentMethod ===
+          "loan"
+        ) {
+          if (
+            remainingBalance <=
+            0
+          ) {
+            loanStatus =
+              "paid";
+          } else if (
+            salePaidNow > 0
+          ) {
+            loanStatus =
+              "partial";
+          } else {
+            loanStatus =
+              "unpaid";
+          }
+        }
 
-        status: sale.status,
+        // ---------------------------------------------
+        // RETURN SALE
+        // ---------------------------------------------
 
-        createdAt: sale.createdAt,
+        return {
+          id:
+            sale.id,
 
-        updatedAt: sale.updatedAt,
+          invoiceNumber:
+            sale.invoiceNumber,
 
-        totalQuantity,
+          customerName:
+            sale.customerName,
 
-        totalProfit: Number(
-          totalProfit.toFixed(2)
-        ),
+          customerMobile:
+            sale.customerMobile,
 
-        items: items.map((item) => ({
-          id: item.id,
+          userId:
+            sale.userId,
 
-          saleId: item.saleId,
+          paymentMethod:
+            sale.paymentMethod,
 
-          productId: item.productId,
+          subtotal:
+            Number(
+              sale.subtotal || 0
+            ),
 
-          sku: item.sku,
+          tax:
+            Number(
+              sale.tax || 0
+            ),
 
-          barcode: item.barcode,
+          // Full sale amount.
+          total:
+            saleTotal,
 
-          productName: item.productName,
+          // Amount paid at sale time.
+          paidNow:
+            salePaidNow,
 
-          quantity: Number(item.quantity || 0),
+          // Outstanding balance.
+          remainingBalance:
+            remainingBalance,
 
-          unitPrice: Number(item.unitPrice || 0),
+          // Only relevant to loan sales.
+          loanStatus:
+            loanStatus,
 
-          costPrice: Number(item.costPrice || 0),
+          cashGiven:
+            sale.cashGiven !==
+              null &&
+            sale.cashGiven !==
+              undefined
+              ? Number(
+                  sale.cashGiven
+                )
+              : null,
 
-          subtotal: Number(item.subtotal || 0),
+          changeAmount:
+            Number(
+              sale.changeAmount ||
+                0
+            ),
 
-          profit: Number(item.profit || 0),
-        })),
-      };
-    });
+          status:
+            sale.status,
+
+          createdAt:
+            sale.createdAt,
+
+          updatedAt:
+            sale.updatedAt,
+
+          totalQuantity:
+            totalQuantity,
+
+          totalProfit:
+            Number(
+              totalProfit.toFixed(
+                2
+              )
+            ),
+
+          items:
+            items.map(
+              (item) => ({
+                id:
+                  item.id,
+
+                saleId:
+                  item.saleId,
+
+                productId:
+                  item.productId,
+
+                sku:
+                  item.sku,
+
+                barcode:
+                  item.barcode,
+
+                productName:
+                  item.productName,
+
+                quantity:
+                  Number(
+                    item.quantity ||
+                      0
+                  ),
+
+                unitPrice:
+                  Number(
+                    item.unitPrice ||
+                      0
+                  ),
+
+                costPrice:
+                  Number(
+                    item.costPrice ||
+                      0
+                  ),
+
+                subtotal:
+                  Number(
+                    item.subtotal ||
+                      0
+                  ),
+
+                profit:
+                  Number(
+                    item.profit ||
+                      0
+                  ),
+              })
+            ),
+        };
+      });
 
     // =====================================================
     // SUMMARY
     // =====================================================
 
-    const totalSales = formattedSales.reduce(
-      (total, sale) =>
-        total + Number(sale.total || 0),
-      0
-    );
+    const totalSales =
+      formattedSales.reduce(
+        (total, sale) =>
+          total +
+          Number(
+            sale.total || 0
+          ),
+        0
+      );
 
-    const totalProfit = formattedSales.reduce(
-      (total, sale) =>
-        total + Number(sale.totalProfit || 0),
-      0
-    );
+    const totalPaidNow =
+      formattedSales.reduce(
+        (total, sale) =>
+          total +
+          Number(
+            sale.paidNow || 0
+          ),
+        0
+      );
 
-    const totalItems = formattedSales.reduce(
-      (total, sale) =>
-        total + Number(sale.totalQuantity || 0),
-      0
-    );
+    const totalOutstanding =
+      formattedSales.reduce(
+        (total, sale) =>
+          total +
+          Number(
+            sale.remainingBalance ||
+              0
+          ),
+        0
+      );
+
+    const totalLoanSales =
+      formattedSales.reduce(
+        (total, sale) =>
+          sale.paymentMethod ===
+          "loan"
+            ? total +
+              Number(
+                sale.total || 0
+              )
+            : total,
+        0
+      );
+
+    const totalLoanPaid =
+      formattedSales.reduce(
+        (total, sale) =>
+          sale.paymentMethod ===
+          "loan"
+            ? total +
+              Number(
+                sale.paidNow || 0
+              )
+            : total,
+        0
+      );
+
+    const totalLoanOutstanding =
+      formattedSales.reduce(
+        (total, sale) =>
+          sale.paymentMethod ===
+          "loan"
+            ? total +
+              Number(
+                sale.remainingBalance ||
+                  0
+              )
+            : total,
+        0
+      );
+
+    const totalProfit =
+      formattedSales.reduce(
+        (total, sale) =>
+          total +
+          Number(
+            sale.totalProfit || 0
+          ),
+        0
+      );
+
+    const totalItems =
+      formattedSales.reduce(
+        (total, sale) =>
+          total +
+          Number(
+            sale.totalQuantity ||
+              0
+          ),
+        0
+      );
+
+    // =====================================================
+    // LOAN TRANSACTION COUNT
+    // =====================================================
+
+    const loanTransactions =
+      formattedSales.filter(
+        (sale) =>
+          sale.paymentMethod ===
+          "loan"
+      ).length;
+
+    const unpaidLoanTransactions =
+      formattedSales.filter(
+        (sale) =>
+          sale.paymentMethod ===
+            "loan" &&
+          sale.loanStatus ===
+            "unpaid"
+      ).length;
+
+    const partialLoanTransactions =
+      formattedSales.filter(
+        (sale) =>
+          sale.paymentMethod ===
+            "loan" &&
+          sale.loanStatus ===
+            "partial"
+      ).length;
+
+    const paidLoanTransactions =
+      formattedSales.filter(
+        (sale) =>
+          sale.paymentMethod ===
+            "loan" &&
+          sale.loanStatus ===
+            "paid"
+      ).length;
 
     // =====================================================
     // SUCCESS
     // =====================================================
 
     return res.status(200).json({
-      successful: true,
+      successful:
+        true,
 
-      message: "Sales retrieved successfully",
+      message:
+        "Sales retrieved successfully",
 
       filters: {
-        mode: cleanMode,
+        mode:
+          cleanMode,
 
-        search: cleanSearch,
+        search:
+          cleanSearch,
 
-        startDate: cleanStartDate,
+        paymentMethod:
+          cleanPaymentMethod,
 
-        endDate: cleanEndDate,
+        status:
+          cleanStatus,
+
+        startDate:
+          cleanStartDate,
+
+        endDate:
+          cleanEndDate,
       },
 
       pagination: {
-        page: cleanPage,
+        page:
+          cleanPage,
 
-        limit: cleanLimit,
+        limit:
+          cleanLimit,
 
-        total: count,
+        total:
+          count,
 
         totalPages:
           count === 0
             ? 1
-            : Math.ceil(count / cleanLimit),
+            : Math.ceil(
+                count /
+                  cleanLimit
+              ),
       },
 
       summary: {
-        transactions: count,
+        transactions:
+          count,
 
-        sales: Number(
-          totalSales.toFixed(2)
-        ),
+        // Full value of sales.
+        sales:
+          Number(
+            totalSales.toFixed(
+              2
+            )
+          ),
 
-        profit: Number(
-          totalProfit.toFixed(2)
-        ),
+        // Amount actually paid now.
+        paidNow:
+          Number(
+            totalPaidNow.toFixed(
+              2
+            )
+          ),
 
-        items: totalItems,
+        // Outstanding balance.
+        outstanding:
+          Number(
+            totalOutstanding.toFixed(
+              2
+            )
+          ),
+
+        profit:
+          Number(
+            totalProfit.toFixed(
+              2
+            )
+          ),
+
+        items:
+          totalItems,
+
+        // ---------------------------------------------
+        // LOAN SUMMARY
+        // ---------------------------------------------
+
+        loans: {
+          transactions:
+            loanTransactions,
+
+          total:
+            Number(
+              totalLoanSales.toFixed(
+                2
+              )
+            ),
+
+          paidNow:
+            Number(
+              totalLoanPaid.toFixed(
+                2
+              )
+            ),
+
+          outstanding:
+            Number(
+              totalLoanOutstanding.toFixed(
+                2
+              )
+            ),
+
+          unpaid:
+            unpaidLoanTransactions,
+
+          partial:
+            partialLoanTransactions,
+
+          paid:
+            paidLoanTransactions,
+        },
       },
 
-      data: formattedSales,
+      data:
+        formattedSales,
     });
   } catch (error) {
-    console.error("Get sales error:", error);
+    console.error(
+      "Get sales error:",
+      error
+    );
 
     return res.status(500).json({
-      successful: false,
+      successful:
+        false,
 
-      message: "Failed to retrieve sales",
+      message:
+        "Failed to retrieve sales",
 
       error:
         error.message ||

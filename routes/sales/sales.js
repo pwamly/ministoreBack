@@ -36,6 +36,9 @@ const isValidDateString = (value) => {
 
 /**
  * Create start-of-day Date from YYYY-MM-DD.
+ *
+ * Uses server local time, matching the existing
+ * date filtering behavior.
  */
 const createStartOfDay = (dateString) => {
   const [year, month, day] = dateString.split("-").map(Number);
@@ -70,392 +73,40 @@ const createEndOfDay = (dateString) => {
 
 /**
  * =========================================================
- * NUMBER HELPERS
+ * RESET SUMMARY
  * =========================================================
  */
 
-const toNumber = (value) => {
-  const number = Number(value);
+const emptySummary = () => ({
+  transactions: 0,
+  sales: 0,
+  paidNow: 0,
+  outstanding: 0,
+  profit: 0,
+  items: 0,
 
-  return Number.isFinite(number) ? number : 0;
-};
-
-const roundMoney = (value) => {
-  return Number(toNumber(value).toFixed(2));
-};
-
-/**
- * =========================================================
- * FORMAT SALE
- * =========================================================
- *
- * This is shared between:
- *
- * 1. Paginated table data
- * 2. Full summary data
- *
- * Keeping this in one place prevents the two calculations
- * from becoming inconsistent.
- */
-const formatSale = (sale) => {
-  const items = Array.isArray(sale.items)
-    ? sale.items
-    : [];
-
-  /**
-   * TOTAL PROFIT
-   */
-  const totalProfit = items.reduce(
-    (total, item) => {
-      return (
-        total +
-        toNumber(item.profit)
-      );
-    },
-    0
-  );
-
-  /**
-   * TOTAL QUANTITY
-   */
-  const totalQuantity = items.reduce(
-    (total, item) => {
-      return (
-        total +
-        toNumber(item.quantity)
-      );
-    },
-    0
-  );
-
-  /**
-   * SALE TOTAL
-   */
-  const saleTotal = toNumber(
-    sale.total
-  );
-
-  /**
-   * PAID NOW
-   */
-  const salePaidNow = toNumber(
-    sale.paidNow
-  );
-
-  /**
-   * REMAINING BALANCE
-   *
-   * Only loans should normally have a
-   * remaining balance.
-   */
-  const remainingBalance = roundMoney(
-    Math.max(
-      saleTotal - salePaidNow,
-      0
-    )
-  );
-
-  /**
-   * LOAN STATUS
-   */
-  let loanStatus = null;
-
-  if (sale.paymentMethod === "loan") {
-    if (remainingBalance <= 0) {
-      loanStatus = "paid";
-    } else if (salePaidNow > 0) {
-      loanStatus = "partial";
-    } else {
-      loanStatus = "unpaid";
-    }
-  }
-
-  /**
-   * RETURN FORMATTED SALE
-   */
-  return {
-    id: sale.id,
-
-    invoiceNumber:
-      sale.invoiceNumber,
-
-    customerName:
-      sale.customerName,
-
-    customerMobile:
-      sale.customerMobile,
-
-    userId:
-      sale.userId,
-
-    paymentMethod:
-      sale.paymentMethod,
-
-    subtotal:
-      toNumber(sale.subtotal),
-
-    tax:
-      toNumber(sale.tax),
-
-    total:
-      saleTotal,
-
-    paidNow:
-      salePaidNow,
-
-    remainingBalance:
-      remainingBalance,
-
-    loanStatus:
-      loanStatus,
-
-    cashGiven:
-      sale.cashGiven !== null &&
-      sale.cashGiven !== undefined
-        ? toNumber(sale.cashGiven)
-        : null,
-
-    changeAmount:
-      toNumber(sale.changeAmount),
-
-    status:
-      sale.status,
-
-    createdAt:
-      sale.createdAt,
-
-    updatedAt:
-      sale.updatedAt,
-
-    totalQuantity:
-      totalQuantity,
-
-    totalProfit:
-      roundMoney(totalProfit),
-
-    items:
-      items.map((item) => ({
-        id:
-          item.id,
-
-        saleId:
-          item.saleId,
-
-        productId:
-          item.productId,
-
-        sku:
-          item.sku,
-
-        barcode:
-          item.barcode,
-
-        productName:
-          item.productName,
-
-        quantity:
-          toNumber(item.quantity),
-
-        unitPrice:
-          toNumber(item.unitPrice),
-
-        costPrice:
-          toNumber(item.costPrice),
-
-        subtotal:
-          toNumber(item.subtotal),
-
-        profit:
-          toNumber(item.profit),
-      })),
-  };
-};
+  loans: {
+    transactions: 0,
+    total: 0,
+    paidNow: 0,
+    outstanding: 0,
+    unpaid: 0,
+    partial: 0,
+    paid: 0,
+  },
+});
 
 /**
  * =========================================================
- * BUILD SUMMARY
- * =========================================================
- *
- * IMPORTANT:
- *
- * This function receives ALL matching sales,
- * not just the current pagination page.
- */
-const buildSummary = (formattedSales) => {
-  const totalSales = formattedSales.reduce(
-    (total, sale) => {
-      return (
-        total +
-        toNumber(sale.total)
-      );
-    },
-    0
-  );
-
-  const totalPaidNow = formattedSales.reduce(
-    (total, sale) => {
-      return (
-        total +
-        toNumber(sale.paidNow)
-      );
-    },
-    0
-  );
-
-  const totalOutstanding = formattedSales.reduce(
-    (total, sale) => {
-      return (
-        total +
-        toNumber(sale.remainingBalance)
-      );
-    },
-    0
-  );
-
-  const totalProfit = formattedSales.reduce(
-    (total, sale) => {
-      return (
-        total +
-        toNumber(sale.totalProfit)
-      );
-    },
-    0
-  );
-
-  const totalItems = formattedSales.reduce(
-    (total, sale) => {
-      return (
-        total +
-        toNumber(sale.totalQuantity)
-      );
-    },
-    0
-  );
-
-  /**
-   * =======================================================
-   * LOANS
-   * =======================================================
-   */
-
-  const loanSales = formattedSales.filter(
-    (sale) =>
-      sale.paymentMethod === "loan"
-  );
-
-  const loanTransactions =
-    loanSales.length;
-
-  const totalLoanSales = loanSales.reduce(
-    (total, sale) => {
-      return (
-        total +
-        toNumber(sale.total)
-      );
-    },
-    0
-  );
-
-  const totalLoanPaid = loanSales.reduce(
-    (total, sale) => {
-      return (
-        total +
-        toNumber(sale.paidNow)
-      );
-    },
-    0
-  );
-
-  const totalLoanOutstanding =
-    loanSales.reduce(
-      (total, sale) => {
-        return (
-          total +
-          toNumber(
-            sale.remainingBalance
-          )
-        );
-      },
-      0
-    );
-
-  const unpaidLoanTransactions =
-    loanSales.filter(
-      (sale) =>
-        sale.loanStatus === "unpaid"
-    ).length;
-
-  const partialLoanTransactions =
-    loanSales.filter(
-      (sale) =>
-        sale.loanStatus === "partial"
-    ).length;
-
-  const paidLoanTransactions =
-    loanSales.filter(
-      (sale) =>
-        sale.loanStatus === "paid"
-    ).length;
-
-  return {
-    transactions:
-      formattedSales.length,
-
-    sales:
-      roundMoney(totalSales),
-
-    paidNow:
-      roundMoney(totalPaidNow),
-
-    outstanding:
-      roundMoney(totalOutstanding),
-
-    profit:
-      roundMoney(totalProfit),
-
-    items:
-      totalItems,
-
-    loans: {
-      transactions:
-        loanTransactions,
-
-      total:
-        roundMoney(totalLoanSales),
-
-      paidNow:
-        roundMoney(totalLoanPaid),
-
-      outstanding:
-        roundMoney(
-          totalLoanOutstanding
-        ),
-
-      unpaid:
-        unpaidLoanTransactions,
-
-      partial:
-        partialLoanTransactions,
-
-      paid:
-        paidLoanTransactions,
-    },
-  };
-};
-
-/**
- * =========================================================
- * CONTROLLER
+ * MAIN CONTROLLER
  * =========================================================
  */
 
 export default async (req, res) => {
   try {
-    /**
-     * =======================================================
-     * VALIDATE MODELS
-     * =======================================================
-     */
+    // =====================================================
+    // VALIDATE MODELS
+    // =====================================================
 
     if (!sales) {
       throw new Error(
@@ -469,11 +120,9 @@ export default async (req, res) => {
       );
     }
 
-    /**
-     * =======================================================
-     * QUERY PARAMETERS
-     * =======================================================
-     */
+    // =====================================================
+    // QUERY PARAMETERS
+    // =====================================================
 
     const {
       mode = "all",
@@ -486,16 +135,17 @@ export default async (req, res) => {
       limit = 20,
     } = req.query;
 
-    /**
-     * =======================================================
-     * NORMALIZE
-     * =======================================================
-     */
+    // =====================================================
+    // NORMALIZE MODE
+    // =====================================================
 
-    const cleanMode =
-      String(mode)
-        .trim()
-        .toLowerCase();
+    const cleanMode = String(mode)
+      .trim()
+      .toLowerCase();
+
+    // =====================================================
+    // NORMALIZE SEARCH
+    // =====================================================
 
     const cleanSearch =
       search !== undefined &&
@@ -503,6 +153,10 @@ export default async (req, res) => {
       String(search).trim() !== ""
         ? String(search).trim()
         : null;
+
+    // =====================================================
+    // NORMALIZE PAYMENT METHOD
+    // =====================================================
 
     const cleanPaymentMethod =
       paymentMethod !== undefined &&
@@ -513,6 +167,10 @@ export default async (req, res) => {
             .toLowerCase()
         : null;
 
+    // =====================================================
+    // NORMALIZE STATUS
+    // =====================================================
+
     const cleanStatus =
       status !== undefined &&
       status !== null &&
@@ -522,40 +180,69 @@ export default async (req, res) => {
             .toLowerCase()
         : null;
 
+    // =====================================================
+    // NORMALIZE PAGE
+    // =====================================================
+
     const cleanPage = Math.max(
       Number(page) || 1,
       1
     );
 
+    // =====================================================
+    // NORMALIZE LIMIT
+    // =====================================================
+
     /**
-     * =======================================================
      * IMPORTANT
-     * =======================================================
      *
-     * Keep the normal API page size capped.
+     * 10,000 is our special "SHOW ALL" value.
      *
-     * The table gets a maximum of 100 records per request.
+     * If the frontend sends:
      *
-     * The SUMMARY is calculated separately from ALL
-     * matching records.
+     *     limit=10000
+     *
+     * we DO NOT reduce it to 100.
+     *
+     * Instead:
+     *
+     *     10,000 => no Sequelize limit
+     *            => no offset
+     *            => return every matching sale
+     *
+     * For normal pagination, we still protect
+     * the API with a maximum of 5,000.
      */
-    const cleanLimit = Math.min(
-      Math.max(
-        Number(limit) || 20,
-        1
-      ),
-      100
-    );
 
-    const offset =
-      (cleanPage - 1) *
-      cleanLimit;
+    const requestedLimit =
+      Number(limit) || 20;
+
+    const SHOW_ALL_LIMIT = 10000;
+
+    const isShowAll =
+      requestedLimit === SHOW_ALL_LIMIT;
+
+    const cleanLimit = isShowAll
+      ? SHOW_ALL_LIMIT
+      : Math.min(
+          Math.max(
+            requestedLimit,
+            1
+          ),
+          5000
+        );
 
     /**
-     * =======================================================
-     * NORMALIZE DATES
-     * =======================================================
+     * Only calculate offset when pagination
+     * is actually being used.
      */
+    const offset = isShowAll
+      ? 0
+      : (cleanPage - 1) * cleanLimit;
+
+    // =====================================================
+    // NORMALIZE DATES
+    // =====================================================
 
     const cleanStartDate =
       startDate !== undefined &&
@@ -571,11 +258,9 @@ export default async (req, res) => {
         ? String(endDate).trim()
         : null;
 
-    /**
-     * =======================================================
-     * VALIDATE MODE
-     * =======================================================
-     */
+    // =====================================================
+    // VALIDATE MODE
+    // =====================================================
 
     const allowedModes = [
       "all",
@@ -585,11 +270,7 @@ export default async (req, res) => {
       "yearly",
     ];
 
-    if (
-      !allowedModes.includes(
-        cleanMode
-      )
-    ) {
+    if (!allowedModes.includes(cleanMode)) {
       return res.status(400).json({
         successful: false,
 
@@ -598,11 +279,9 @@ export default async (req, res) => {
       });
     }
 
-    /**
-     * =======================================================
-     * VALIDATE PAYMENT METHOD
-     * =======================================================
-     */
+    // =====================================================
+    // VALIDATE PAYMENT METHOD
+    // =====================================================
 
     const allowedPaymentMethods = [
       "cash",
@@ -627,17 +306,13 @@ export default async (req, res) => {
       });
     }
 
-    /**
-     * =======================================================
-     * VALIDATE CUSTOM DATES
-     * =======================================================
-     */
+    // =====================================================
+    // VALIDATE START DATE
+    // =====================================================
 
     if (
       cleanStartDate &&
-      !isValidDateString(
-        cleanStartDate
-      )
+      !isValidDateString(cleanStartDate)
     ) {
       return res.status(400).json({
         successful: false,
@@ -650,11 +325,13 @@ export default async (req, res) => {
       });
     }
 
+    // =====================================================
+    // VALIDATE END DATE
+    // =====================================================
+
     if (
       cleanEndDate &&
-      !isValidDateString(
-        cleanEndDate
-      )
+      !isValidDateString(cleanEndDate)
     ) {
       return res.status(400).json({
         successful: false,
@@ -667,11 +344,9 @@ export default async (req, res) => {
       });
     }
 
-    /**
-     * =======================================================
-     * VALIDATE DATE RANGE
-     * =======================================================
-     */
+    // =====================================================
+    // VALIDATE DATE RANGE
+    // =====================================================
 
     if (
       cleanStartDate &&
@@ -697,23 +372,23 @@ export default async (req, res) => {
       }
     }
 
-    /**
-     * =======================================================
-     * BUILD SALE WHERE
-     * =======================================================
-     */
+    // =====================================================
+    // BUILD SALE WHERE
+    // =====================================================
 
     const saleWhere = {};
 
-    /**
-     * =======================================================
-     * DATE FILTER
-     * =======================================================
-     *
-     * Custom dates take priority over mode.
-     */
+    // =====================================================
+    // DATE FILTER
+    // =====================================================
 
     const now = new Date();
+
+    /**
+     * CUSTOM DATE RANGE
+     *
+     * startDate/endDate have priority over mode.
+     */
 
     if (
       cleanStartDate ||
@@ -739,9 +414,10 @@ export default async (req, res) => {
         dateFilter;
     }
 
-    /**
-     * TODAY
-     */
+    // =====================================================
+    // TODAY
+    // =====================================================
+
     else if (
       cleanMode === "today"
     ) {
@@ -773,11 +449,10 @@ export default async (req, res) => {
       };
     }
 
-    /**
-     * WEEKLY
-     *
-     * Monday -> Sunday
-     */
+    // =====================================================
+    // WEEKLY
+    // =====================================================
+
     else if (
       cleanMode === "weekly"
     ) {
@@ -826,9 +501,10 @@ export default async (req, res) => {
       };
     }
 
-    /**
-     * MONTHLY
-     */
+    // =====================================================
+    // MONTHLY
+    // =====================================================
+
     else if (
       cleanMode === "monthly"
     ) {
@@ -862,9 +538,10 @@ export default async (req, res) => {
       };
     }
 
-    /**
-     * YEARLY
-     */
+    // =====================================================
+    // YEARLY
+    // =====================================================
+
     else if (
       cleanMode === "yearly"
     ) {
@@ -898,33 +575,27 @@ export default async (req, res) => {
       };
     }
 
-    /**
-     * =======================================================
-     * PAYMENT METHOD FILTER
-     * =======================================================
-     */
+    // =====================================================
+    // PAYMENT METHOD FILTER
+    // =====================================================
 
     if (cleanPaymentMethod) {
       saleWhere.paymentMethod =
         cleanPaymentMethod;
     }
 
-    /**
-     * =======================================================
-     * STATUS FILTER
-     * =======================================================
-     */
+    // =====================================================
+    // STATUS FILTER
+    // =====================================================
 
     if (cleanStatus) {
       saleWhere.status =
         cleanStatus;
     }
 
-    /**
-     * =======================================================
-     * SEARCH
-     * =======================================================
-     */
+    // =====================================================
+    // SEARCH
+    // =====================================================
 
     if (cleanSearch) {
       saleWhere[Op.or] = [
@@ -961,11 +632,9 @@ export default async (req, res) => {
       ];
     }
 
-    /**
-     * =======================================================
-     * DEBUG
-     * =======================================================
-     */
+    // =====================================================
+    // DEBUG
+    // =====================================================
 
     console.log(
       "GET SALES QUERY:",
@@ -988,11 +657,14 @@ export default async (req, res) => {
         endDate:
           cleanEndDate,
 
+        requestedLimit,
+
+        cleanLimit,
+
+        isShowAll,
+
         page:
           cleanPage,
-
-        limit:
-          cleanLimit,
 
         offset,
 
@@ -1000,30 +672,20 @@ export default async (req, res) => {
       }
     );
 
-    /**
-     * =======================================================
-     * 1. GET PAGINATED SALES
-     * =======================================================
-     *
-     * This is ONLY for the table.
-     */
-    const {
-      count,
-      rows,
-    } = await sales.findAndCountAll({
-      where:
-        saleWhere,
+    // =====================================================
+    // BUILD QUERY OPTIONS
+    // =====================================================
+
+    const queryOptions = {
+      where: saleWhere,
 
       include: [
         {
-          model:
-            salesItems,
+          model: salesItems,
 
-          as:
-            "items",
+          as: "items",
 
-          required:
-            false,
+          required: false,
         },
       ],
 
@@ -1034,90 +696,448 @@ export default async (req, res) => {
         ],
       ],
 
-      limit:
-        cleanLimit,
-
-      offset,
-
-      distinct:
-        true,
-    });
+      distinct: true,
+    };
 
     /**
-     * Format table rows.
+     * =====================================================
+     * IMPORTANT
+     *
+     * SHOW ALL MODE
+     * =====================================================
+     *
+     * When limit=10000:
+     *
+     * DO NOT send:
+     *
+     *     limit: 10000
+     *
+     * DO NOT send:
+     *
+     *     offset: 0
+     *
+     * Instead we omit both completely.
+     *
+     * Sequelize will therefore return ALL records
+     * matching the date/search/filter conditions.
      */
+
+    if (!isShowAll) {
+      queryOptions.limit =
+        cleanLimit;
+
+      queryOptions.offset =
+        offset;
+    }
+
+    // =====================================================
+    // GET SALES
+    // =====================================================
+
+    const {
+      count,
+      rows,
+    } =
+      await sales.findAndCountAll(
+        queryOptions
+      );
+
+    // =====================================================
+    // FORMAT SALES
+    // =====================================================
+
     const formattedSales =
-      rows.map(formatSale);
+      rows.map((sale) => {
+        const items =
+          sale.items || [];
 
-    /**
-     * =======================================================
-     * 2. GET ALL MATCHING SALES FOR SUMMARY
-     * =======================================================
-     *
-     * IMPORTANT:
-     *
-     * There is NO limit and NO offset here.
-     *
-     * Therefore September 1 -> September 30 summary
-     * includes every matching September sale, even if
-     * there are 500, 1,000 or more transactions.
-     *
-     * This is the critical fix.
-     */
-    const allSalesForSummary =
-      await sales.findAll({
-        where:
-          saleWhere,
+        // ---------------------------------------------
+        // TOTAL PROFIT
+        // ---------------------------------------------
 
-        include: [
-          {
-            model:
-              salesItems,
+        const totalProfit =
+          items.reduce(
+            (total, item) =>
+              total +
+              Number(
+                item.profit || 0
+              ),
+            0
+          );
 
-            as:
-              "items",
+        // ---------------------------------------------
+        // TOTAL QUANTITY
+        // ---------------------------------------------
 
-            required:
-              false,
-          },
-        ],
+        const totalQuantity =
+          items.reduce(
+            (total, item) =>
+              total +
+              Number(
+                item.quantity || 0
+              ),
+            0
+          );
 
-        attributes: [
-          "id",
-          "paymentMethod",
-          "total",
-          "paidNow",
-        ],
+        // ---------------------------------------------
+        // SALE TOTAL
+        // ---------------------------------------------
+
+        const saleTotal =
+          Number(
+            sale.total || 0
+          );
+
+        // ---------------------------------------------
+        // PAID NOW
+        // ---------------------------------------------
+
+        const salePaidNow =
+          Number(
+            sale.paidNow || 0
+          );
+
+        // ---------------------------------------------
+        // REMAINING BALANCE
+        // ---------------------------------------------
+
+        const remainingBalance =
+          Number(
+            Math.max(
+              saleTotal -
+                salePaidNow,
+              0
+            ).toFixed(2)
+          );
+
+        // ---------------------------------------------
+        // LOAN STATUS
+        // ---------------------------------------------
+
+        let loanStatus =
+          null;
+
+        if (
+          sale.paymentMethod ===
+          "loan"
+        ) {
+          if (
+            remainingBalance <= 0
+          ) {
+            loanStatus =
+              "paid";
+          } else if (
+            salePaidNow > 0
+          ) {
+            loanStatus =
+              "partial";
+          } else {
+            loanStatus =
+              "unpaid";
+          }
+        }
+
+        // ---------------------------------------------
+        // RETURN SALE
+        // ---------------------------------------------
+
+        return {
+          id:
+            sale.id,
+
+          invoiceNumber:
+            sale.invoiceNumber,
+
+          customerName:
+            sale.customerName,
+
+          customerMobile:
+            sale.customerMobile,
+
+          userId:
+            sale.userId,
+
+          paymentMethod:
+            sale.paymentMethod,
+
+          subtotal:
+            Number(
+              sale.subtotal || 0
+            ),
+
+          tax:
+            Number(
+              sale.tax || 0
+            ),
+
+          total:
+            saleTotal,
+
+          paidNow:
+            salePaidNow,
+
+          remainingBalance:
+            remainingBalance,
+
+          loanStatus:
+            loanStatus,
+
+          cashGiven:
+            sale.cashGiven !==
+              null &&
+            sale.cashGiven !==
+              undefined
+              ? Number(
+                  sale.cashGiven
+                )
+              : null,
+
+          changeAmount:
+            Number(
+              sale.changeAmount ||
+                0
+            ),
+
+          status:
+            sale.status,
+
+          createdAt:
+            sale.createdAt,
+
+          updatedAt:
+            sale.updatedAt,
+
+          totalQuantity:
+            totalQuantity,
+
+          totalProfit:
+            Number(
+              totalProfit.toFixed(
+                2
+              )
+            ),
+
+          items:
+            items.map(
+              (item) => ({
+                id:
+                  item.id,
+
+                saleId:
+                  item.saleId,
+
+                productId:
+                  item.productId,
+
+                sku:
+                  item.sku,
+
+                barcode:
+                  item.barcode,
+
+                productName:
+                  item.productName,
+
+                quantity:
+                  Number(
+                    item.quantity ||
+                      0
+                  ),
+
+                unitPrice:
+                  Number(
+                    item.unitPrice ||
+                      0
+                  ),
+
+                costPrice:
+                  Number(
+                    item.costPrice ||
+                      0
+                  ),
+
+                subtotal:
+                  Number(
+                    item.subtotal ||
+                      0
+                  ),
+
+                profit:
+                  Number(
+                    item.profit ||
+                      0
+                  ),
+              })
+            ),
+        };
       });
 
-    /**
-     * Format ALL matching sales for summary.
-     */
-    const formattedSummarySales =
-      allSalesForSummary.map(
-        formatSale
+    // =====================================================
+    // SUMMARY
+    // =====================================================
+
+    const totalSales =
+      formattedSales.reduce(
+        (total, sale) =>
+          total +
+          Number(
+            sale.total || 0
+          ),
+        0
       );
 
-    /**
-     * =======================================================
-     * BUILD FULL SUMMARY
-     * =======================================================
-     */
-
-    const summary =
-      buildSummary(
-        formattedSummarySales
+    const totalPaidNow =
+      formattedSales.reduce(
+        (total, sale) =>
+          total +
+          Number(
+            sale.paidNow || 0
+          ),
+        0
       );
 
+    const totalOutstanding =
+      formattedSales.reduce(
+        (total, sale) =>
+          total +
+          Number(
+            sale.remainingBalance ||
+              0
+          ),
+        0
+      );
+
+    const totalLoanSales =
+      formattedSales.reduce(
+        (total, sale) =>
+          sale.paymentMethod ===
+          "loan"
+            ? total +
+              Number(
+                sale.total || 0
+              )
+            : total,
+        0
+      );
+
+    const totalLoanPaid =
+      formattedSales.reduce(
+        (total, sale) =>
+          sale.paymentMethod ===
+          "loan"
+            ? total +
+              Number(
+                sale.paidNow || 0
+              )
+            : total,
+        0
+      );
+
+    const totalLoanOutstanding =
+      formattedSales.reduce(
+        (total, sale) =>
+          sale.paymentMethod ===
+          "loan"
+            ? total +
+              Number(
+                sale.remainingBalance ||
+                  0
+              )
+            : total,
+        0
+      );
+
+    const totalProfit =
+      formattedSales.reduce(
+        (total, sale) =>
+          total +
+          Number(
+            sale.totalProfit || 0
+          ),
+        0
+      );
+
+    const totalItems =
+      formattedSales.reduce(
+        (total, sale) =>
+          total +
+          Number(
+            sale.totalQuantity ||
+              0
+          ),
+        0
+      );
+
+    // =====================================================
+    // LOAN COUNTS
+    // =====================================================
+
+    const loanTransactions =
+      formattedSales.filter(
+        (sale) =>
+          sale.paymentMethod ===
+          "loan"
+      ).length;
+
+    const unpaidLoanTransactions =
+      formattedSales.filter(
+        (sale) =>
+          sale.paymentMethod ===
+            "loan" &&
+          sale.loanStatus ===
+            "unpaid"
+      ).length;
+
+    const partialLoanTransactions =
+      formattedSales.filter(
+        (sale) =>
+          sale.paymentMethod ===
+            "loan" &&
+          sale.loanStatus ===
+            "partial"
+      ).length;
+
+    const paidLoanTransactions =
+      formattedSales.filter(
+        (sale) =>
+          sale.paymentMethod ===
+            "loan" &&
+          sale.loanStatus ===
+            "paid"
+      ).length;
+
+    // =====================================================
+    // PAGINATION RESPONSE
+    // =====================================================
+
     /**
-     * =======================================================
-     * SUCCESS
-     * =======================================================
+     * In SHOW ALL mode:
+     *
+     * page       = 1
+     * limit      = 10000
+     * total      = actual matching records
+     * totalPages = 1
+     * showAll    = true
+     *
+     * The frontend can then hide pagination.
      */
+
+    const totalPages =
+      isShowAll
+        ? 1
+        : count === 0
+        ? 1
+        : Math.ceil(
+            count /
+              cleanLimit
+          );
+
+    // =====================================================
+    // SUCCESS
+    // =====================================================
 
     return res.status(200).json({
-      successful:
-        true,
+      successful: true,
 
       message:
         "Sales retrieved successfully",
@@ -1144,7 +1164,9 @@ export default async (req, res) => {
 
       pagination: {
         page:
-          cleanPage,
+          isShowAll
+            ? 1
+            : cleanPage,
 
         limit:
           cleanLimit,
@@ -1153,24 +1175,69 @@ export default async (req, res) => {
           count,
 
         totalPages:
-          count === 0
-            ? 1
-            : Math.ceil(
-                count /
-                  cleanLimit
-              ),
+          totalPages,
+
+        showAll:
+          isShowAll,
       },
 
-      /**
-       * FULL DATE-RANGE SUMMARY
-       *
-       * This is NOT page-specific.
-       */
-      summary,
+      summary: {
+        transactions:
+          count,
 
-      /**
-       * ONLY CURRENT PAGE
-       */
+        sales:
+          Number(
+            totalSales.toFixed(2)
+          ),
+
+        paidNow:
+          Number(
+            totalPaidNow.toFixed(2)
+          ),
+
+        outstanding:
+          Number(
+            totalOutstanding.toFixed(2)
+          ),
+
+        profit:
+          Number(
+            totalProfit.toFixed(2)
+          ),
+
+        items:
+          totalItems,
+
+        loans: {
+          transactions:
+            loanTransactions,
+
+          total:
+            Number(
+              totalLoanSales.toFixed(2)
+            ),
+
+          paidNow:
+            Number(
+              totalLoanPaid.toFixed(2)
+            ),
+
+          outstanding:
+            Number(
+              totalLoanOutstanding.toFixed(2)
+            ),
+
+          unpaid:
+            unpaidLoanTransactions,
+
+          partial:
+            partialLoanTransactions,
+
+          paid:
+            paidLoanTransactions,
+        },
+      },
+
       data:
         formattedSales,
     });
@@ -1181,8 +1248,7 @@ export default async (req, res) => {
     );
 
     return res.status(500).json({
-      successful:
-        false,
+      successful: false,
 
       message:
         "Failed to retrieve sales",

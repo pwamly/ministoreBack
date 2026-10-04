@@ -3,7 +3,11 @@
 import { Op } from "sequelize";
 import db from "../../models/index.js";
 
-const { sales, salesItems } = db;
+const {
+  sales,
+  salesItems,
+  min_user,
+} = db;
 
 /**
  * =========================================================
@@ -23,9 +27,14 @@ const isValidDateString = (value) => {
     return false;
   }
 
-  const [year, month, day] = value.split("-").map(Number);
+  const [year, month, day] =
+    value.split("-").map(Number);
 
-  const date = new Date(year, month - 1, day);
+  const date = new Date(
+    year,
+    month - 1,
+    day
+  );
 
   return (
     date.getFullYear() === year &&
@@ -37,11 +46,13 @@ const isValidDateString = (value) => {
 /**
  * Create start-of-day Date from YYYY-MM-DD.
  *
- * Uses server local time, matching the existing
- * date filtering behavior.
+ * Uses server local time.
  */
-const createStartOfDay = (dateString) => {
-  const [year, month, day] = dateString.split("-").map(Number);
+const createStartOfDay = (
+  dateString
+) => {
+  const [year, month, day] =
+    dateString.split("-").map(Number);
 
   return new Date(
     year,
@@ -57,8 +68,11 @@ const createStartOfDay = (dateString) => {
 /**
  * Create end-of-day Date from YYYY-MM-DD.
  */
-const createEndOfDay = (dateString) => {
-  const [year, month, day] = dateString.split("-").map(Number);
+const createEndOfDay = (
+  dateString
+) => {
+  const [year, month, day] =
+    dateString.split("-").map(Number);
 
   return new Date(
     year,
@@ -70,31 +84,6 @@ const createEndOfDay = (dateString) => {
     999
   );
 };
-
-/**
- * =========================================================
- * RESET SUMMARY
- * =========================================================
- */
-
-const emptySummary = () => ({
-  transactions: 0,
-  sales: 0,
-  paidNow: 0,
-  outstanding: 0,
-  profit: 0,
-  items: 0,
-
-  loans: {
-    transactions: 0,
-    total: 0,
-    paidNow: 0,
-    outstanding: 0,
-    unpaid: 0,
-    partial: 0,
-    paid: 0,
-  },
-});
 
 /**
  * =========================================================
@@ -117,6 +106,12 @@ export default async (req, res) => {
     if (!salesItems) {
       throw new Error(
         "Sales items model is not initialized"
+      );
+    }
+
+    if (!min_user) {
+      throw new Error(
+        "min_user model is not initialized"
       );
     }
 
@@ -194,24 +189,30 @@ export default async (req, res) => {
     // =====================================================
 
     /**
-     * IMPORTANT
+     * =====================================================
+     * SPECIAL SHOW-ALL MODE
+     * =====================================================
      *
-     * 10,000 is our special "SHOW ALL" value.
-     *
-     * If the frontend sends:
+     * When the UI sends:
      *
      *     limit=10000
      *
-     * we DO NOT reduce it to 100.
+     * we treat 10000 as:
      *
-     * Instead:
+     *     SHOW ALL
      *
-     *     10,000 => no Sequelize limit
-     *            => no offset
-     *            => return every matching sale
+     * We intentionally DO NOT pass:
      *
-     * For normal pagination, we still protect
-     * the API with a maximum of 5,000.
+     *     limit: 10000
+     *
+     * to Sequelize.
+     *
+     * We also DO NOT pass:
+     *
+     *     offset: 0
+     *
+     * This means Sequelize retrieves every matching
+     * record.
      */
 
     const requestedLimit =
@@ -220,7 +221,15 @@ export default async (req, res) => {
     const SHOW_ALL_LIMIT = 10000;
 
     const isShowAll =
-      requestedLimit === SHOW_ALL_LIMIT;
+      requestedLimit ===
+      SHOW_ALL_LIMIT;
+
+    /**
+     * Maximum normal pagination limit.
+     *
+     * This does NOT affect limit=10000.
+     */
+    const MAX_PAGE_LIMIT = 5000;
 
     const cleanLimit = isShowAll
       ? SHOW_ALL_LIMIT
@@ -229,16 +238,17 @@ export default async (req, res) => {
             requestedLimit,
             1
           ),
-          5000
+          MAX_PAGE_LIMIT
         );
 
     /**
-     * Only calculate offset when pagination
-     * is actually being used.
+     * Offset is only used when
+     * pagination is enabled.
      */
     const offset = isShowAll
       ? 0
-      : (cleanPage - 1) * cleanLimit;
+      : (cleanPage - 1) *
+        cleanLimit;
 
     // =====================================================
     // NORMALIZE DATES
@@ -270,7 +280,11 @@ export default async (req, res) => {
       "yearly",
     ];
 
-    if (!allowedModes.includes(cleanMode)) {
+    if (
+      !allowedModes.includes(
+        cleanMode
+      )
+    ) {
       return res.status(400).json({
         successful: false,
 
@@ -312,7 +326,9 @@ export default async (req, res) => {
 
     if (
       cleanStartDate &&
-      !isValidDateString(cleanStartDate)
+      !isValidDateString(
+        cleanStartDate
+      )
     ) {
       return res.status(400).json({
         successful: false,
@@ -331,7 +347,9 @@ export default async (req, res) => {
 
     if (
       cleanEndDate &&
-      !isValidDateString(cleanEndDate)
+      !isValidDateString(
+        cleanEndDate
+      )
     ) {
       return res.status(400).json({
         successful: false,
@@ -385,11 +403,9 @@ export default async (req, res) => {
     const now = new Date();
 
     /**
-     * CUSTOM DATE RANGE
-     *
-     * startDate/endDate have priority over mode.
+     * Custom date range has priority
+     * over mode.
      */
-
     if (
       cleanStartDate ||
       cleanEndDate
@@ -605,24 +621,28 @@ export default async (req, res) => {
               `%${cleanSearch}%`,
           },
         },
+
         {
           customerName: {
             [Op.like]:
               `%${cleanSearch}%`,
           },
         },
+
         {
           customerMobile: {
             [Op.like]:
               `%${cleanSearch}%`,
           },
         },
+
         {
           paymentMethod: {
             [Op.like]:
               `%${cleanSearch}%`,
           },
         },
+
         {
           status: {
             [Op.like]:
@@ -680,12 +700,33 @@ export default async (req, res) => {
       where: saleWhere,
 
       include: [
+        // =================================================
+        // SALE ITEMS
+        // =================================================
         {
           model: salesItems,
 
           as: "items",
 
           required: false,
+        },
+
+        // =================================================
+        // USER
+        // =================================================
+        {
+          model: min_user,
+
+          as: "user",
+
+          required: false,
+
+          attributes: [
+            "id",
+            "first_name",
+            "last_name",
+            "username",
+          ],
         },
       ],
 
@@ -699,29 +740,14 @@ export default async (req, res) => {
       distinct: true,
     };
 
-    /**
-     * =====================================================
-     * IMPORTANT
-     *
-     * SHOW ALL MODE
-     * =====================================================
-     *
-     * When limit=10000:
-     *
-     * DO NOT send:
-     *
-     *     limit: 10000
-     *
-     * DO NOT send:
-     *
-     *     offset: 0
-     *
-     * Instead we omit both completely.
-     *
-     * Sequelize will therefore return ALL records
-     * matching the date/search/filter conditions.
-     */
+    // =====================================================
+    // PAGINATION
+    // =====================================================
 
+    /**
+     * Only add limit and offset when
+     * we are NOT in SHOW ALL mode.
+     */
     if (!isShowAll) {
       queryOptions.limit =
         cleanLimit;
@@ -751,9 +777,30 @@ export default async (req, res) => {
         const items =
           sale.items || [];
 
-        // ---------------------------------------------
+        // =================================================
+        // USER
+        // =================================================
+
+        const user =
+          sale.user || null;
+
+        const userName =
+          user
+            ? [
+                user.first_name,
+                user.last_name,
+              ]
+                .filter(Boolean)
+                .join(" ")
+                .trim() || null
+            : null;
+
+        const username =
+          user?.username || null;
+
+        // =================================================
         // TOTAL PROFIT
-        // ---------------------------------------------
+        // =================================================
 
         const totalProfit =
           items.reduce(
@@ -765,9 +812,9 @@ export default async (req, res) => {
             0
           );
 
-        // ---------------------------------------------
+        // =================================================
         // TOTAL QUANTITY
-        // ---------------------------------------------
+        // =================================================
 
         const totalQuantity =
           items.reduce(
@@ -779,27 +826,27 @@ export default async (req, res) => {
             0
           );
 
-        // ---------------------------------------------
+        // =================================================
         // SALE TOTAL
-        // ---------------------------------------------
+        // =================================================
 
         const saleTotal =
           Number(
             sale.total || 0
           );
 
-        // ---------------------------------------------
+        // =================================================
         // PAID NOW
-        // ---------------------------------------------
+        // =================================================
 
         const salePaidNow =
           Number(
             sale.paidNow || 0
           );
 
-        // ---------------------------------------------
+        // =================================================
         // REMAINING BALANCE
-        // ---------------------------------------------
+        // =================================================
 
         const remainingBalance =
           Number(
@@ -810,19 +857,19 @@ export default async (req, res) => {
             ).toFixed(2)
           );
 
-        // ---------------------------------------------
+        // =================================================
         // LOAN STATUS
-        // ---------------------------------------------
+        // =================================================
 
-        let loanStatus =
-          null;
+        let loanStatus = null;
 
         if (
           sale.paymentMethod ===
           "loan"
         ) {
           if (
-            remainingBalance <= 0
+            remainingBalance <=
+            0
           ) {
             loanStatus =
               "paid";
@@ -837,9 +884,9 @@ export default async (req, res) => {
           }
         }
 
-        // ---------------------------------------------
+        // =================================================
         // RETURN SALE
-        // ---------------------------------------------
+        // =================================================
 
         return {
           id:
@@ -854,11 +901,29 @@ export default async (req, res) => {
           customerMobile:
             sale.customerMobile,
 
+          // =================================================
+          // USER INFORMATION
+          // =================================================
+
           userId:
             sale.userId,
 
+          userName:
+            userName,
+
+          username:
+            username,
+
+          // =================================================
+          // PAYMENT
+          // =================================================
+
           paymentMethod:
             sale.paymentMethod,
+
+          // =================================================
+          // AMOUNTS
+          // =================================================
 
           subtotal:
             Number(
@@ -879,8 +944,16 @@ export default async (req, res) => {
           remainingBalance:
             remainingBalance,
 
+          // =================================================
+          // LOAN
+          // =================================================
+
           loanStatus:
             loanStatus,
+
+          // =================================================
+          // CASH
+          // =================================================
 
           cashGiven:
             sale.cashGiven !==
@@ -898,14 +971,26 @@ export default async (req, res) => {
                 0
             ),
 
+          // =================================================
+          // STATUS
+          // =================================================
+
           status:
             sale.status,
+
+          // =================================================
+          // DATES
+          // =================================================
 
           createdAt:
             sale.createdAt,
 
           updatedAt:
             sale.updatedAt,
+
+          // =================================================
+          // TOTALS
+          // =================================================
 
           totalQuantity:
             totalQuantity,
@@ -916,6 +1001,10 @@ export default async (req, res) => {
                 2
               )
             ),
+
+          // =================================================
+          // ITEMS
+          // =================================================
 
           items:
             items.map(
@@ -1111,15 +1200,13 @@ export default async (req, res) => {
     // =====================================================
 
     /**
-     * In SHOW ALL mode:
+     * SHOW ALL:
      *
      * page       = 1
      * limit      = 10000
      * total      = actual matching records
      * totalPages = 1
      * showAll    = true
-     *
-     * The frontend can then hide pagination.
      */
 
     const totalPages =
@@ -1142,6 +1229,10 @@ export default async (req, res) => {
       message:
         "Sales retrieved successfully",
 
+      // ===================================================
+      // FILTERS
+      // ===================================================
+
       filters: {
         mode:
           cleanMode,
@@ -1162,6 +1253,10 @@ export default async (req, res) => {
           cleanEndDate,
       },
 
+      // ===================================================
+      // PAGINATION
+      // ===================================================
+
       pagination: {
         page:
           isShowAll
@@ -1180,6 +1275,10 @@ export default async (req, res) => {
         showAll:
           isShowAll,
       },
+
+      // ===================================================
+      // SUMMARY
+      // ===================================================
 
       summary: {
         transactions:
@@ -1214,17 +1313,23 @@ export default async (req, res) => {
 
           total:
             Number(
-              totalLoanSales.toFixed(2)
+              totalLoanSales.toFixed(
+                2
+              )
             ),
 
           paidNow:
             Number(
-              totalLoanPaid.toFixed(2)
+              totalLoanPaid.toFixed(
+                2
+              )
             ),
 
           outstanding:
             Number(
-              totalLoanOutstanding.toFixed(2)
+              totalLoanOutstanding.toFixed(
+                2
+              )
             ),
 
           unpaid:
@@ -1237,6 +1342,10 @@ export default async (req, res) => {
             paidLoanTransactions,
         },
       },
+
+      // ===================================================
+      // DATA
+      // ===================================================
 
       data:
         formattedSales,

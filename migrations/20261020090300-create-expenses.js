@@ -2,6 +2,7 @@
 
 import { v4 as uuidv4 } from "uuid";
 import { DEFAULT_EXPENSE_CATEGORIES } from "../config/defaults.js";
+import { addForeignKey } from "../utils/schema.js";
 
 export default {
     async up(queryInterface, Sequelize) {
@@ -106,12 +107,6 @@ export default {
             userId: {
                 type: Sequelize.CHAR(36),
                 allowNull: false,
-                references: {
-                    model: "min_user",
-                    key: "id",
-                },
-                onUpdate: "CASCADE",
-                onDelete: "RESTRICT",
             },
             createdAt: {
                 type: Sequelize.DATE,
@@ -124,6 +119,8 @@ export default {
                 defaultValue: Sequelize.fn("NOW"),
             },
         });
+
+        await addForeignKey(queryInterface, { table: "expenses", column: "userId", refTable: "min_user", allowNull: false });
 
         await queryInterface.addIndex("expenses", ["tenantId", "expenseDate"], {
             name: "expenses_tenant_date_idx",

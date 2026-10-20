@@ -1,5 +1,7 @@
 "use strict";
 
+import { addForeignKey, columnSpec, dropForeignKeysOn } from "../utils/schema.js";
+
 // Items sold at checkout that are not (yet) registered products.
 // A sale line can now point at an unregistered item instead of a
 // product; when a manager registers or links it, the sale lines
@@ -66,23 +68,14 @@ export default {
             productId: {
                 type: Sequelize.UUID,
                 allowNull: true,
-                references: { model: "products", key: "id" },
-                onUpdate: "CASCADE",
-                onDelete: "SET NULL",
             },
             createdBy: {
                 type: Sequelize.CHAR(36),
                 allowNull: false,
-                references: { model: "min_user", key: "id" },
-                onUpdate: "CASCADE",
-                onDelete: "RESTRICT",
             },
             resolvedBy: {
                 type: Sequelize.CHAR(36),
                 allowNull: true,
-                references: { model: "min_user", key: "id" },
-                onUpdate: "CASCADE",
-                onDelete: "SET NULL",
             },
             resolvedAt: {
                 type: Sequelize.DATE,
@@ -100,6 +93,10 @@ export default {
             },
         });
 
+        await addForeignKey(queryInterface, { table: "unregisteredItems", column: "productId", refTable: "products", onDelete: "SET NULL" });
+        await addForeignKey(queryInterface, { table: "unregisteredItems", column: "createdBy", refTable: "min_user", allowNull: false });
+        await addForeignKey(queryInterface, { table: "unregisteredItems", column: "resolvedBy", refTable: "min_user", onDelete: "SET NULL" });
+
         await queryInterface.addIndex("unregisteredItems", ["tenantId", "status", "matchKey"], {
             name: "unregistered_items_tenant_status_key_idx",
         });
@@ -107,14 +104,18 @@ export default {
         // Manual sale lines have no product. Raw SQL keeps the
         // existing foreign key (changeColumn would try to re-add it).
         await queryInterface.sequelize.query(
-            "ALTER TABLE salesItems MODIFY productId CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL"
+            `ALTER TABLE salesItems MODIFY productId ${await columnSpec(queryInterface, "salesItems", "productId")} NULL`
         );
 
         await queryInterface.addColumn("salesItems", "unregisteredItemId", {
             type: Sequelize.UUID,
             allowNull: true,
-            references: { model: "unregisteredItems", key: "id" },
-            onUpdate: "CASCADE",
+        });
+
+        await addForeignKey(queryInterface, {
+            table: "salesItems",
+            column: "unregisteredItemId",
+            refTable: "unregisteredItems",
             onDelete: "SET NULL",
         });
     },
@@ -130,10 +131,11 @@ export default {
             );
         }
 
+        await dropForeignKeysOn(queryInterface, "salesItems", "unregisteredItemId");
         await queryInterface.removeColumn("salesItems", "unregisteredItemId");
 
         await queryInterface.sequelize.query(
-            "ALTER TABLE salesItems MODIFY productId CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL"
+            `ALTER TABLE salesItems MODIFY productId ${await columnSpec(queryInterface, "salesItems", "productId")} NOT NULL`
         );
 
         await queryInterface.dropTable("unregisteredItems");

@@ -1,6 +1,7 @@
 "use strict";
 
 import { v4 as uuidv4 } from "uuid";
+import { addForeignKey, dropForeignKeysOn } from "../utils/schema.js";
 
 // Global product catalog shared by every store.
 //
@@ -48,23 +49,14 @@ export default {
             brandId: {
                 type: Sequelize.UUID,
                 allowNull: true,
-                references: { model: "brands", key: "id" },
-                onUpdate: "CASCADE",
-                onDelete: "SET NULL",
             },
             categoryId: {
                 type: Sequelize.UUID,
                 allowNull: true,
-                references: { model: "categories", key: "id" },
-                onUpdate: "CASCADE",
-                onDelete: "SET NULL",
             },
             unitId: {
                 type: Sequelize.UUID,
                 allowNull: true,
-                references: { model: "units", key: "id" },
-                onUpdate: "CASCADE",
-                onDelete: "SET NULL",
             },
             flavor: { type: Sequelize.STRING(100), allowNull: true },
             size: { type: Sequelize.STRING(50), allowNull: true },
@@ -106,11 +98,23 @@ export default {
 
         await queryInterface.addIndex("catalogItems", ["nameKey"], { name: "catalog_items_name_key_idx" });
 
+        for (const [column, refTable] of [
+            ["brandId", "brands"],
+            ["categoryId", "categories"],
+            ["unitId", "units"],
+        ]) {
+            await addForeignKey(queryInterface, { table: "catalogItems", column, refTable, onDelete: "SET NULL" });
+        }
+
         await queryInterface.addColumn("products", "catalogItemId", {
             type: Sequelize.UUID,
             allowNull: true,
-            references: { model: "catalogItems", key: "id" },
-            onUpdate: "CASCADE",
+        });
+
+        await addForeignKey(queryInterface, {
+            table: "products",
+            column: "catalogItemId",
+            refTable: "catalogItems",
             onDelete: "SET NULL",
         });
 
@@ -194,6 +198,7 @@ export default {
     },
 
     async down(queryInterface) {
+        await dropForeignKeysOn(queryInterface, "products", "catalogItemId");
         await queryInterface.removeColumn("products", "catalogItemId");
         await queryInterface.dropTable("catalogItems");
     },

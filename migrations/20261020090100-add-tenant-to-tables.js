@@ -1,5 +1,7 @@
 "use strict";
 
+import { addForeignKey } from "../utils/schema.js";
+
 // Adds tenantId to every business table, moves existing rows
 // to the default tenant and turns global unique keys (SKU,
 // barcode, invoice number, names) into per-tenant unique keys.
@@ -92,24 +94,15 @@ export default {
             }
         }
 
-        for (const table of TENANT_TABLES) {
-            await queryInterface.changeColumn(table, "tenantId", {
-                type: Sequelize.UUID,
-                allowNull: false,
-            });
-        }
-
+        // NOT NULL for store data; NULL allowed for shared lookups
+        // and platform users. Column type copied from tenants.id.
         for (const table of [...TENANT_TABLES, ...SHARED_LOOKUP_TABLES, "min_user"]) {
-            await queryInterface.addConstraint(table, {
-                fields: ["tenantId"],
-                type: "foreign key",
+            await addForeignKey(queryInterface, {
+                table,
+                column: "tenantId",
+                refTable: "tenants",
+                allowNull: !TENANT_TABLES.includes(table),
                 name: fkName(table),
-                references: {
-                    table: "tenants",
-                    field: "id",
-                },
-                onUpdate: "CASCADE",
-                onDelete: "RESTRICT",
             });
         }
 

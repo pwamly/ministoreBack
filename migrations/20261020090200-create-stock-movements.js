@@ -1,5 +1,7 @@
 "use strict";
 
+import { addForeignKey } from "../utils/schema.js";
+
 // Every change to inventory.quantity writes one row here, so
 // stock levels can always be explained (who, when, why).
 
@@ -24,12 +26,6 @@ export default {
             productId: {
                 type: Sequelize.UUID,
                 allowNull: false,
-                references: {
-                    model: "products",
-                    key: "id",
-                },
-                onUpdate: "CASCADE",
-                onDelete: "CASCADE",
             },
             // opening | purchase | sale | adjustment | return | damage
             type: {
@@ -61,12 +57,6 @@ export default {
             supplierId: {
                 type: Sequelize.UUID,
                 allowNull: true,
-                references: {
-                    model: "suppliers",
-                    key: "id",
-                },
-                onUpdate: "CASCADE",
-                onDelete: "SET NULL",
             },
             note: {
                 type: Sequelize.STRING(500),
@@ -75,12 +65,6 @@ export default {
             userId: {
                 type: Sequelize.CHAR(36),
                 allowNull: false,
-                references: {
-                    model: "min_user",
-                    key: "id",
-                },
-                onUpdate: "CASCADE",
-                onDelete: "RESTRICT",
             },
             createdAt: {
                 type: Sequelize.DATE,
@@ -93,6 +77,11 @@ export default {
                 defaultValue: Sequelize.fn("NOW"),
             },
         });
+
+        // Links to existing tables (type copied from the target column).
+        await addForeignKey(queryInterface, { table: "stockMovements", column: "productId", refTable: "products", allowNull: false, onDelete: "CASCADE" });
+        await addForeignKey(queryInterface, { table: "stockMovements", column: "supplierId", refTable: "suppliers", onDelete: "SET NULL" });
+        await addForeignKey(queryInterface, { table: "stockMovements", column: "userId", refTable: "min_user", allowNull: false });
 
         await queryInterface.addIndex("stockMovements", ["tenantId", "createdAt"], {
             name: "stock_movements_tenant_created_idx",

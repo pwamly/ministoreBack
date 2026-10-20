@@ -12,6 +12,8 @@
     "db:migrate": "sequelize-cli db:migrate",
     "db:migrate:undo": "sequelize-cli db:migrate:undo",
     "db:migrate:status": "sequelize-cli db:migrate:status",
+    "db:check": "node scripts/db-check.js",
+    "db:baseline": "node scripts/db-check.js --baseline",
     "tenant:create": "node scripts/manage.js tenant:create",
     "user:role": "node scripts/manage.js user:role",
     "superadmin:create": "node scripts/manage.js superadmin:create",

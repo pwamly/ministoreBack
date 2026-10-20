@@ -1,39 +1,46 @@
 "use strict";
 
-import { Op } from "sequelize";  // Import 'Op' from sequelize using ES module synta
-import { v4 as uuidv4 } from "uuid";
-import min_user  from "../models/min_user.js";
+import { compare } from "bcrypt";
 
+import { assertUserIsUnique } from "../services/tenantSetup.js";
+import { handler, cleanString, badRequest } from "../utils/http.js";
 
-export default async(req, res) => {
-    const { id } = req.payload;
-    try {
-        const {
-            firstname: first_name,
-            lastname: last_name,
-            email,
-            username,
-            phone,
-            signature,
-        } = req.body;
-        const bodyPayload = {
-            first_name,
-            last_name,
-            email,
-            username,
-            phone,
-            signature,
-        };
+/**
+ * Logged-in user edits their own profile. Role, tenant and
+ * status cannot be changed here.
+ */
+export default handler(async (req, res) => {
+    const user = req.user;
 
-        const updated = await min_user.update({...bodyPayload }, { where: { id } });
+    const changes = {
+        first_name: cleanString(req.body.firstname ?? req.body.first_name) ?? user.first_name,
+        last_name: cleanString(req.body.lastname ?? req.body.last_name) ?? user.last_name,
+        email: cleanString(req.body.email) ?? user.email,
+        username: cleanString(req.body.username) ?? user.username,
+        phone: cleanString(req.body.phone) ?? user.phone,
+        signature: cleanString(req.body.signature) ?? user.signature,
+    };
 
-        if (updated == 1) {
-            console.log("user created", updated, id);
-            return res.json({ success: true });
+    await assertUserIsUnique(changes, undefined, user.id);
+
+    const { password, currentPassword } = req.body;
+
+    if (password) {
+        const ok = Boolean(currentPassword) && (await compare(String(currentPassword), user.password));
+
+        if (!ok) {
+            throw badRequest("Current password is incorrect");
         }
 
-        return res.json({ success: false });
-    } catch (error) {
-        console.log("error", error);
+        if (String(password).length < 6) {
+            throw badRequest("Password must be at least 6 characters");
+        }
+
+        changes.password = password;
     }
-};
+
+    await user.update(changes);
+
+    return res.json({ successful: true, success: true });
+});
+

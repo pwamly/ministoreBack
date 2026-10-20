@@ -1,49 +1,58 @@
 "use strict";
-import {db} from "../models/index.js";
+
+import { randomInt } from "crypto";
+import jwt from "jsonwebtoken";
+
+import config from "../config/index.js";
+import db from "../models/index.js";
+
+const { sign } = jwt;
 const { min_user } = db;
-import { Model, Op } from "sequelize";
-import pkg from 'jsonwebtoken';
-const { sign } = pkg;
 
-export default async(req, res) => {
-    const { email, phone } = req.body;
-    if (email) {
-        try {
-            // check if user exist
-            const user = await min_user.findOne({
-                where: {
-                    [Op.or]: [{ email }],
-                },
-                raw: true,
-            });
-            if (user) {
-                // generate recovery code
-                const code = Math.floor(1000 + Math.random() * 9000);
+/**
+ * Creates a 15-minute recovery code for the account.
+ *
+ * The code must reach the user out-of-band (email/SMS). No
+ * sender is wired up yet, so in development it is printed to
+ * the server console. It is never returned in the response,
+ * otherwise anyone could reset anyone's password.
+ */
+export default async (req, res) => {
+    const { email } = req.body;
 
-                // save it into token
+    const generic = {
+        successful: true,
+        message: "If the account exists, a recovery code has been sent.",
+    };
 
-                const recoveryCode = sign({ code }, process.env.RECOVERY_SECRETE, {
-                    expiresIn: "15m",
-                });
+    if (!email) {
+        return res.status(400).json({ successful: false, message: "Email is required" });
+    }
 
-                // save code to db
-                try {
-                    const savedcode = await min_user.update({ recoveryCode }, {
-                        where: { email },
-                    });
-                    console.log("is it successful", savedcode);
-                    // sendback generated code
-                    return res.status(200).json({ code });
-                } catch (error) {
-                    console.log("error on saving code", error);
-                }
-            } else {
-                return res
-                    .status(404)
-                    .json({ data: { message: "Account not found!" } });
-            }
-        } catch (error) {
-            console.log(error);
+    try {
+        const user = await min_user.findOne({ where: { email } });
+
+        if (!user) {
+            return res.status(200).json(generic);
         }
+
+        const code = randomInt(100000, 1000000);
+
+        const recoveryCode = sign({ code, id: user.id }, config.auth.recoverySecret, {
+            expiresIn: "15m",
+        });
+
+        await user.update({ recoveryCode });
+
+        // TODO: send `code` by email/SMS once a provider is configured.
+        if (config.isDev) {
+            console.log(`[dev] recovery code for ${email}: ${code}`);
+        }
+
+        return res.status(200).json(generic);
+    } catch (error) {
+        console.error("FORGOT PASSWORD ERROR:", error);
+
+        return res.status(500).json({ successful: false, message: "Something went wrong" });
     }
 };

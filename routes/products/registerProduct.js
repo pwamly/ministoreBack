@@ -2,6 +2,9 @@
 
 import { v4 as uuidv4 } from "uuid";
 import db from "../../models/index.js";
+import { applyStockChange } from "../../services/stock.js";
+import { linkProductToCatalog } from "../../services/catalog.js";
+import { STOCK_MOVEMENT_TYPES } from "../../models/stockMovement.js";
 
 const {
     sequelize,
@@ -50,7 +53,15 @@ export default async (req, res) => {
             shelfLifeMonths,
             allergens,
             storageInstructions,
+
+            // Optional stock setup
+            openingStock,
+            reorderLevel,
+            reorderQuantity,
+            location,
         } = req.body;
+
+        const tenantId = req.tenantId;
 
         // =====================================================
         // VALIDATE MODELS
@@ -132,12 +143,50 @@ export default async (req, res) => {
                 ? String(barcode).trim()
                 : null;
 
+        const cleanOpeningStock =
+            openingStock !== undefined &&
+            openingStock !== null &&
+            openingStock !== ""
+                ? Number(openingStock)
+                : 0;
+
+        if (
+            !Number.isFinite(cleanOpeningStock) ||
+            cleanOpeningStock < 0
+        ) {
+            return res.status(400).json({
+                successful: false,
+                message: "Opening stock must be 0 or more",
+            });
+        }
+
+        // =====================================================
+        // PLAN LIMIT
+        // =====================================================
+
+        const maxProducts = req.tenant?.plan?.maxProducts;
+
+        if (maxProducts) {
+            const productCount = await product.count({
+                where: { tenantId },
+            });
+
+            if (productCount >= maxProducts) {
+                return res.status(403).json({
+                    successful: false,
+                    code: "PLAN_LIMIT",
+                    message: `Your plan allows ${maxProducts} products. Upgrade to add more.`,
+                });
+            }
+        }
+
         // =====================================================
         // DUPLICATE SKU
         // =====================================================
 
         const existingSku = await product.findOne({
             where: {
+                tenantId,
                 sku: cleanSku,
             },
             raw: true,
@@ -158,6 +207,7 @@ export default async (req, res) => {
             const existingBarcode =
                 await productbarcode.findOne({
                     where: {
+                        tenantId,
                         barcode: cleanBarcode,
                     },
                     raw: true,
@@ -187,6 +237,8 @@ export default async (req, res) => {
                     await product.create(
                         {
                             id: productId,
+
+                            tenantId,
 
                             sku: cleanSku,
 
@@ -230,6 +282,8 @@ export default async (req, res) => {
                 await productdetails.create(
                     {
                         id: uuidv4(),
+
+                        tenantId,
 
                         productId,
 
@@ -303,6 +357,8 @@ export default async (req, res) => {
                         {
                             id: uuidv4(),
 
+                            tenantId,
+
                             productId,
 
                             barcode: cleanBarcode,
@@ -329,6 +385,8 @@ export default async (req, res) => {
                 await productregulatory.create(
                     {
                         id: uuidv4(),
+
+                        tenantId,
 
                         productId,
 
@@ -364,6 +422,50 @@ export default async (req, res) => {
                         transaction,
                     }
                 );
+
+                // =================================================
+                // STOCK RECORD
+                // =================================================
+
+                await db.inventory.create(
+                    {
+                        tenantId,
+                        productId,
+                        quantity: 0,
+                        reorderLevel: Number(reorderLevel) || 0,
+                        reorderQuantity: Number(reorderQuantity) || 0,
+                        location: location || null,
+                    },
+                    {
+                        transaction,
+                    }
+                );
+
+                if (cleanOpeningStock > 0) {
+                    await applyStockChange({
+                        tenantId,
+                        productId,
+                        delta: cleanOpeningStock,
+                        type: STOCK_MOVEMENT_TYPES.OPENING,
+                        userId: req.user.id,
+                        unitCost:
+                            costPrice !== undefined &&
+                            costPrice !== null &&
+                            costPrice !== ""
+                                ? costPrice
+                                : null,
+                        note: "Opening stock",
+                        transaction,
+                    });
+                }
+
+                // Share the product's identity with other stores.
+                await linkProductToCatalog({
+                    product: createdProduct,
+                    barcode: cleanBarcode,
+                    barcodeType,
+                    transaction,
+                });
 
                 return createdProduct;
             }

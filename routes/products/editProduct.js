@@ -102,9 +102,13 @@ export default async (req, res) => {
         // FIND PRODUCT
         // =====================================================
 
+        const tenantId = req.tenantId;
+
+        // Scoped to the store: another tenant's product is "not found".
         const existingProduct = await product.findOne({
             where: {
                 id,
+                tenantId,
             },
         });
 
@@ -128,6 +132,7 @@ export default async (req, res) => {
             const duplicateSku =
                 await product.findOne({
                     where: {
+                        tenantId,
                         sku: cleanSku,
                     },
                 });
@@ -161,6 +166,7 @@ export default async (req, res) => {
             existingBarcode =
                 await productbarcode.findOne({
                     where: {
+                        tenantId,
                         barcode: cleanBarcode,
                     },
                 });
@@ -471,6 +477,8 @@ export default async (req, res) => {
                                 {
                                     id:
                                         crypto.randomUUID(),
+
+                                    tenantId,
 
                                     productId:
                                         id,

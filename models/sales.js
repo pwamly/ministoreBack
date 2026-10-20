@@ -11,10 +11,14 @@ export default (sequelize, DataTypes) => {
         primaryKey: true,
       },
 
+      tenantId: {
+        type: DataTypes.UUID,
+        allowNull: false,
+      },
+
       invoiceNumber: {
         type: DataTypes.STRING(50),
         allowNull: false,
-        unique: true,
       },
 
       customerName: {
@@ -94,6 +98,12 @@ export default (sequelize, DataTypes) => {
         type: DataTypes.STRING(30),
         allowNull: false,
         defaultValue: "completed",
+      },
+
+      // Loan sales only: when the balance should be cleared.
+      loanDueDate: {
+        type: DataTypes.DATEONLY,
+        allowNull: true,
       },
 
       createdAt: {

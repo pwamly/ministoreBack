@@ -15,10 +15,13 @@ export default async (req, res) => {
             saleId,
             amount,
             paymentMethod,
-            userId,
             note,
             paidAt,
         } = req.body;
+
+        // Recorded against the logged-in user, never the request body.
+        const userId = req.user.id;
+        const tenantId = req.tenantId;
 
         // =====================================================
         // VALIDATE MODELS
@@ -143,6 +146,7 @@ export default async (req, res) => {
             await sales.findOne({
                 where: {
                     id: saleId,
+                    tenantId,
                 },
             });
 
@@ -185,6 +189,7 @@ export default async (req, res) => {
                         await sales.findOne({
                             where: {
                                 id: saleId,
+                                tenantId,
                             },
 
                             transaction,
@@ -296,6 +301,8 @@ export default async (req, res) => {
 
                                 saleId:
                                     saleId,
+
+                                tenantId,
 
                                 amount:
                                     roundedAmount,

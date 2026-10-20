@@ -1,37 +1,76 @@
 "use strict";
 
 import db from "../models/index.js";
-import sendRefreshToken from "./sendRefreshToken.js";
+import { ROLES } from "../config/permissions.js";
+import {
+    createAccessToken,
+    createRefreshToken,
+    sendRefreshToken,
+    sessionProfile,
+} from "../services/auth.js";
+import { subscriptionState } from "../services/subscription.js";
 
-const { min_user } = db;
+const { min_user, tenant: Tenant, plan: Plan } = db;
 
 export default async (req, res) => {
-  try {
-    const { username, password } = req.body;
+    try {
+        const { username, password } = req.body;
 
-    console.log("LOGIN:", username);
+        let user;
 
-    const result = await min_user.validateAndGet(username, password);
+        try {
+            user = await min_user.validateAndGet(username, password);
+        } catch (error) {
+            return res.status(401).json({
+                successful: false,
+                success: false,
+                message: error.message || "Login failed",
+            });
+        }
 
+        if (user.status !== "active") {
+            return res.status(403).json({
+                successful: false,
+                success: false,
+                message: "This account has been disabled. Contact your store owner.",
+            });
+        }
 
-    const { access_token, refresh_token,profile } = result;
+        const tenant = user.tenantId
+            ? await Tenant.findByPk(user.tenantId, {
+                  include: [{ model: Plan, as: "plan" }],
+              })
+            : null;
 
-    // IMPORTANT: send HttpOnly refresh-token cookie
+        if (user.userRole !== ROLES.SUPER_ADMIN) {
+            const state = subscriptionState(tenant);
 
-    sendRefreshToken(res, refresh_token);
+            if (!state.ok) {
+                return res.status(402).json({
+                    successful: false,
+                    success: false,
+                    code: "SUBSCRIPTION_INACTIVE",
+                    message: state.reason,
+                });
+            }
+        }
 
-    return res.status(200).json({
-      success: true,
-      message: "Login successful",
-      accessToken: access_token,
-      profile: profile,
-    });
-  } catch (error) {
-    console.error("LOGIN ERROR:", error);
+        sendRefreshToken(res, await createRefreshToken(user));
 
-    return res.status(401).json({
-      success: false,
-      message: "Login failed",
-    });
-  }
+        return res.status(200).json({
+            successful: true,
+            success: true,
+            message: "Login successful",
+            accessToken: createAccessToken(user),
+            profile: sessionProfile(user, tenant),
+        });
+    } catch (error) {
+        console.error("LOGIN ERROR:", error);
+
+        return res.status(500).json({
+            successful: false,
+            success: false,
+            message: "Login failed",
+        });
+    }
 };

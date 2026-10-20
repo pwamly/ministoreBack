@@ -1,5 +1,8 @@
 node_modules
 package.json
 .env
-*/config/config.json
- cert
+.env.*
+!.env.example
+config/config.json
+cert/
+dist/

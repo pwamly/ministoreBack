@@ -1,15 +1,9 @@
 "use strict";
 
 import { Op } from "sequelize";
-import dotenv from "dotenv";
 import { hash, compare } from "bcrypt";
-import jwt from "jsonwebtoken";
 
-import createRefreshToken from "../auth/createRefreshToken.js";
-
-dotenv.config();
-
-const { sign } = jwt;
+import config from "../config/index.js";
 
 export default (sequelize, DataTypes) => {
     const min_user = sequelize.define(
@@ -20,6 +14,12 @@ export default (sequelize, DataTypes) => {
                 allowNull: false,
                 primaryKey: true,
                 unique: true,
+            },
+
+            // NULL only for platform super admins
+            tenantId: {
+                type: DataTypes.UUID,
+                allowNull: true,
             },
 
             first_name: {
@@ -73,12 +73,19 @@ export default (sequelize, DataTypes) => {
             userRole: {
                 type: DataTypes.STRING,
                 allowNull: true,
-                defaultValue: "user",
+                defaultValue: "cashier",
             },
 
             signature: {
                 type: DataTypes.STRING,
                 allowNull: false,
+            },
+
+            // active | disabled
+            status: {
+                type: DataTypes.STRING(20),
+                allowNull: false,
+                defaultValue: "active",
             },
         },
         {
@@ -90,12 +97,20 @@ export default (sequelize, DataTypes) => {
             scopes: {
                 withoutPassword: {
                     attributes: {
-                        exclude: ["password"],
+                        exclude: ["password", "refresh_token", "recoveryCode"],
                     },
                 },
             },
         }
     );
+
+    min_user.associate = (models) => {
+        min_user.belongsTo(models.tenant, {
+            foreignKey: "tenantId",
+            targetKey: "id",
+            as: "tenant",
+        });
+    };
 
     // =====================================================
     // INSTANCE METHOD
@@ -119,7 +134,7 @@ export default (sequelize, DataTypes) => {
         try {
             user.password = await hash(
                 user.password,
-                12
+                config.auth.bcryptRounds
             );
         } catch (error) {
             console.error(
@@ -145,7 +160,7 @@ export default (sequelize, DataTypes) => {
         try {
             user.password = await hash(
                 user.password,
-                12
+                config.auth.bcryptRounds
             );
         } catch (error) {
             console.error(
@@ -162,6 +177,9 @@ export default (sequelize, DataTypes) => {
     // =====================================================
     // LOGIN
     // =====================================================
+    //
+    // Only checks credentials. Tokens are issued by
+    // services/auth.js so login and refresh build the same payload.
 
     min_user.validateAndGet = async function (
         username,
@@ -172,10 +190,6 @@ export default (sequelize, DataTypes) => {
                 "Username/email and password are required!"
             );
         }
-
-        // -------------------------------------------------
-        // Find user
-        // -------------------------------------------------
 
         const user = await min_user.findOne({
             where: {
@@ -188,117 +202,15 @@ export default (sequelize, DataTypes) => {
                     },
                 ],
             },
-
-            raw: true,
         });
 
-        if (!user) {
-            throw new Error(
-                "Account does not exist!"
-            );
+        // Same message for unknown user and wrong password so the
+        // login form cannot be used to discover usernames.
+        if (!user || !(await compare(password, user.password))) {
+            throw new Error("Invalid username or password");
         }
 
-        // -------------------------------------------------
-        // Check password
-        // -------------------------------------------------
-
-        const passwordMatch =
-            await compare(
-                password,
-                user.password
-            );
-
-        if (!passwordMatch) {
-            throw new Error(
-                "Wrong password!"
-            );
-        }
-
-        // -------------------------------------------------
-        // Profile
-        // -------------------------------------------------
-
-        const profile = {
-            id: user.id,
-
-            first_name:
-                user.first_name,
-
-            last_name:
-                user.last_name,
-
-            username:
-                user.username,
-
-            email:
-                user.email,
-
-            userRole:
-                user.userRole,
-
-            phone:
-                user.phone,
-        };
-
-        // -------------------------------------------------
-        // Access token secret
-        // -------------------------------------------------
-
-        if (
-            !process.env
-                .ACCESSTOKEN_SECRETE
-        ) {
-            throw new Error(
-                "ACCESSTOKEN_SECRETE is not configured"
-            );
-        }
-
-        // -------------------------------------------------
-        // Create access token
-        // -------------------------------------------------
-
-        const access_token =
-            sign(
-                profile,
-                process.env
-                    .ACCESSTOKEN_SECRETE,
-                {
-                    expiresIn: "300m",
-                }
-            );
-
-        // -------------------------------------------------
-        // Create refresh token
-        // -------------------------------------------------
-
-        const refresh_token =
-            await createRefreshToken(
-                {
-                    id: user.id,
-
-                    token_version:
-                        user.token_version ??
-                        0,
-                },
-
-                min_user
-            );
-
-        if (!refresh_token) {
-            throw new Error(
-                "Failed to create refresh token"
-            );
-        }
-
-        // -------------------------------------------------
-        // Return internally
-        // -------------------------------------------------
-
-        return {
-            profile,
-            access_token,
-            refresh_token
-        };
+        return user;
     };
 
     return min_user;

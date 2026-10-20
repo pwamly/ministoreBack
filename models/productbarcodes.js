@@ -16,6 +16,11 @@ export default (sequelize, DataTypes) => {
                 primaryKey: true,
             },
 
+            tenantId: {
+                type: DataTypes.UUID,
+                allowNull: false,
+            },
+
             productId: {
                 type: DataTypes.UUID,
                 allowNull: false,
@@ -24,7 +29,6 @@ export default (sequelize, DataTypes) => {
             barcode: {
                 type: DataTypes.STRING(100),
                 allowNull: false,
-                unique: true,
             },
 
             barcodeType: {

@@ -11,14 +11,25 @@ export default (sequelize, DataTypes) => {
         primaryKey: true,
       },
 
+      tenantId: {
+        type: DataTypes.UUID,
+        allowNull: false,
+      },
+
       saleId: {
         type: DataTypes.UUID,
         allowNull: false,
       },
 
+      // NULL for items sold manually (not in the product list)
       productId: {
         type: DataTypes.UUID,
-        allowNull: false,
+        allowNull: true,
+      },
+
+      unregisteredItemId: {
+        type: DataTypes.UUID,
+        allowNull: true,
       },
 
       sku: {
@@ -89,6 +100,12 @@ export default (sequelize, DataTypes) => {
       foreignKey: "productId",
       targetKey: "id",
       as: "product",
+    });
+
+    salesItems.belongsTo(models.unregisteredItem, {
+      foreignKey: "unregisteredItemId",
+      targetKey: "id",
+      as: "unregisteredItem",
     });
   };
 

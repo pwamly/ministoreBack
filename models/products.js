@@ -11,10 +11,14 @@ export default (sequelize, DataTypes) => {
                 primaryKey: true,
             },
 
+            tenantId: {
+                type: DataTypes.UUID,
+                allowNull: false,
+            },
+
             sku: {
                 type: DataTypes.STRING(100),
                 allowNull: false,
-                unique: true,
             },
 
             itemName: {
@@ -63,6 +67,12 @@ export default (sequelize, DataTypes) => {
                 defaultValue: "active",
             },
 
+            // Shared identity in the global catalog (models/catalogItem.js)
+            catalogItemId: {
+                type: DataTypes.UUID,
+                allowNull: true,
+            },
+
             createdAt: {
                 type: DataTypes.DATE,
                 allowNull: false,
@@ -86,6 +96,12 @@ export default (sequelize, DataTypes) => {
     // =====================================================
 
     product.associate = (models) => {
+
+        product.belongsTo(models.catalogItem, {
+            foreignKey: "catalogItemId",
+            targetKey: "id",
+            as: "catalogItem",
+        });
 
         product.belongsTo(models.brand, {
             foreignKey: "brandId",
@@ -126,6 +142,15 @@ export default (sequelize, DataTypes) => {
                 foreignKey: "productId",
                 sourceKey: "id",
                 as: "barcodes",
+            }
+        );
+
+        product.hasOne(
+            models.inventory,
+            {
+                foreignKey: "productId",
+                sourceKey: "id",
+                as: "inventory",
             }
         );
 

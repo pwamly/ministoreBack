@@ -91,7 +91,9 @@ export default async (req, res) => {
         // BUILD WHERE
         // =====================================================
 
-        const where = {};
+        const where = {
+            tenantId: req.tenantId,
+        };
 
         if (cleanSaleId) {
             where.saleId =

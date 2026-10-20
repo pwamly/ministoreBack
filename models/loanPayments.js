@@ -15,6 +15,11 @@ export default (sequelize, DataTypes) => {
                 primaryKey: true,
             },
 
+            tenantId: {
+                type: DataTypes.UUID,
+                allowNull: false,
+            },
+
             // =================================================
             // SALE
             // =================================================

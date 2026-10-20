@@ -1,178 +1,121 @@
 "use strict";
 
-import dotenv from "dotenv";
 import express from "express";
-import controller from "./controller/index.js";
-import bodyParser from "body-parser";
 import cookieParser from "cookie-parser";
-import refreshtoken from "./auth/refreshtoken.js";
 import cors from "cors";
+import http from "http";
 import https from "https";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-dotenv.config();
+import config from "./config/index.js";
+import db from "./models/index.js";
+import controller from "./controller/index.js";
+import refreshtoken from "./auth/refreshtoken.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+app.disable("x-powered-by");
 
-const PORT = process.env.PORT || 5000;
-
-// =====================================================
-// HTTPS
-// =====================================================
-
-const options = {
-  key: fs.readFileSync(path.join(__dirname, "cert", "server.key")),
-
-  cert: fs.readFileSync(path.join(__dirname, "cert", "server.crt")),
-};
+if (config.server.trustProxy) {
+    app.set("trust proxy", 1);
+}
 
 // =====================================================
-// CORS
+// CORS (origins from CORS_ORIGINS in .env)
 // =====================================================
-
-const allowedOrigins = [
-  "https://192.168.1.173:3000",
-  "http://192.168.1.173:3000",
-  "https://localhost:3000",
-  "http://localhost:3000",
-  "https://192.168.1.173:3000",
-  "http://192.168.1.173:3000",
-  "https://localhost:3000",
-  "http://localhost:3000",
-  "https://necbot.store"
-];
 
 app.use(
-  cors({
-    origin: function (origin, callback) {
-      console.log("CORS Origin:", origin);
+    cors({
+        origin(origin, callback) {
+            // Same-origin requests, curl, Postman.
+            if (!origin || config.cors.origins.includes(origin)) {
+                return callback(null, true);
+            }
 
-      // Allow Postman, curl, etc.
-      if (!origin) {
-        return callback(null, true);
-      }
+            console.warn("CORS blocked:", origin);
 
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      console.log("❌ CORS blocked:", origin);
-
-      return callback(null, false);
-    },
-
-    credentials: true,
-
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "Accept",
-      "Origin",
-      "X-Requested-With",
-    ],
-  }),
+            return callback(null, false);
+        },
+        credentials: true,
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization", "Accept", "Origin", "X-Requested-With"],
+    })
 );
 
-// =====================================================
-// REQUEST LOGGER
-// =====================================================
+if (config.server.requestLogging) {
+    app.use((req, res, next) => {
+        console.log(`${new Date().toISOString()} ${req.method} ${req.originalUrl}`);
+        next();
+    });
+}
 
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} ${req.method} ${req.originalUrl}`);
-
-  console.log("Origin:", req.headers.origin || "none");
-
-  next();
-});
-
-// =====================================================
-// BODY PARSER
-// =====================================================
-
-app.use(bodyParser.json());
-
-app.use(
-  bodyParser.urlencoded({
-    extended: true,
-  }),
-);
-
-// =====================================================
-// COOKIES
-// =====================================================
-
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-
-// =====================================================
-// HEALTH CHECK
-// =====================================================
-
-app.get("/health", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "HTTPS server is working",
-  });
-});
 
 // =====================================================
 // ROUTES
 // =====================================================
 
-app.use("/", controller);
+app.get("/health", async (req, res) => {
+    try {
+        await db.sequelize.authenticate();
 
-// =====================================================
-// REFRESH TOKEN
-// =====================================================
+        return res.json({ success: true, env: config.appEnv, database: "up" });
+    } catch {
+        return res.status(503).json({ success: false, env: config.appEnv, database: "down" });
+    }
+});
+
+app.use("/", controller);
 
 app.post("/refresh_token", refreshtoken);
 
-// =====================================================
-// 404
-// =====================================================
-
 app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: "Route not found",
-    path: req.originalUrl,
-  });
+    res.status(404).json({
+        success: false,
+        message: "Route not found",
+        path: req.originalUrl,
+    });
 });
-
-// =====================================================
-// ERROR HANDLER
-// =====================================================
 
 app.use((err, req, res, next) => {
-  console.error("SERVER ERROR:", err);
+    console.error("SERVER ERROR:", err);
 
-  if (res.headersSent) {
-    return next(err);
-  }
+    if (res.headersSent) {
+        return next(err);
+    }
 
-  res.status(500).json({
-    success: false,
-    message: "Internal server error",
-  });
+    res.status(500).json({
+        success: false,
+        message: "Internal server error",
+    });
 });
 
 // =====================================================
-// HTTPS SERVER
+// START
 // =====================================================
 
-https.createServer(options, app).listen(PORT, "0.0.0.0", () => {
-  console.log("");
-  console.log("=================================");
-  console.log("HTTPS SERVER RUNNING");
-  console.log("=================================");
-  console.log(`https://192.168.1.173:${PORT}`);
-  console.log(`https://192.168.1.173:${PORT}/health`);
-  console.log("=================================");
-  console.log("");
+const { host, port, https: tls } = config.server;
+
+const server = tls.enabled
+    ? https.createServer(
+          {
+              key: fs.readFileSync(path.resolve(__dirname, tls.keyPath)),
+              cert: fs.readFileSync(path.resolve(__dirname, tls.certPath)),
+          },
+          app
+      )
+    : http.createServer(app);
+
+server.listen(port, host, () => {
+    const scheme = tls.enabled ? "https" : "http";
+
+    console.log(`[${config.appEnv}] API listening on ${scheme}://${host}:${port}  (db: ${config.db.database}@${config.db.host})`);
 });
+
+export default app;

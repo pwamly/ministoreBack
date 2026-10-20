@@ -12,10 +12,15 @@ export default (sequelize, DataTypes) => {
                 primaryKey: true,
             },
 
+            // NULL = shared default visible to every tenant
+            tenantId: {
+                type: DataTypes.UUID,
+                allowNull: true,
+            },
+
             name: {
                 type: DataTypes.STRING(150),
                 allowNull: false,
-                unique: true,
             },
 
             status: {

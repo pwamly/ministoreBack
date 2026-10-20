@@ -5,6 +5,8 @@ import paginate from "../../afterwares/pagenate.js";
 
 import { Op } from "sequelize";
 import moment from "moment";
+import { has } from "../../middleware/auth/authorize.js";
+import { PERMISSIONS } from "../../config/permissions.js";
 
 // =====================================================
 // MODELS
@@ -18,6 +20,7 @@ const {
     category,
     unit,
     taxgroup,
+    inventory,
 } = db;
 
 // =====================================================
@@ -26,7 +29,10 @@ const {
 
 export default async (req, res) => {
 
-    let where = {};
+    // Every query is limited to the caller's store.
+    let where = {
+        tenantId: req.tenantId,
+    };
 
     const {
         q,
@@ -65,6 +71,7 @@ export default async (req, res) => {
             const barcodeMatches =
                 await productbarcode.findAll({
                     where: {
+                        tenantId: req.tenantId,
                         barcode: search,
                     },
 
@@ -329,12 +336,33 @@ export default async (req, res) => {
 
                     required: false,
                 },
+
+                // =================================================
+                // STOCK
+                // =================================================
+
+                {
+                    model: inventory,
+                    as: "inventory",
+
+                    required: false,
+
+                    attributes: [
+                        "quantity",
+                        "reorderLevel",
+                        "reorderQuantity",
+                        "location",
+                    ],
+                },
             ],
         });
 
         // =====================================================
         // NO PRODUCTS
         // =====================================================
+
+        const summary =
+            await productSummary(req.tenantId);
 
         if (!rows || rows.length === 0) {
 
@@ -345,6 +373,8 @@ export default async (req, res) => {
                 data: [],
 
                 total: 0,
+
+                summary,
 
                 pagination: {
                     currentPage,
@@ -360,10 +390,20 @@ export default async (req, res) => {
         // CONVERT SEQUELIZE INSTANCES TO JSON
         // =====================================================
 
+        const canSeeCost =
+            has(req, PERMISSIONS.PRODUCTS_VIEW_COST);
+
         const newdata =
             rows.map((item) => {
 
-                return item.toJSON();
+                const json = item.toJSON();
+
+                // Cashiers must not see buying prices.
+                if (!canSeeCost && json.details) {
+                    delete json.details.costPrice;
+                }
+
+                return json;
 
             });
 
@@ -395,6 +435,8 @@ export default async (req, res) => {
 
             total: count,
 
+            summary,
+
         };
 
         return res.status(200).json(data);
@@ -419,3 +461,33 @@ export default async (req, res) => {
         });
     }
 };
+
+// =====================================================
+// SUMMARY (whole store, ignores filters)
+// =====================================================
+
+async function productSummary(tenantId) {
+
+    const [total, active, lowStock] =
+        await Promise.all([
+            product.count({ where: { tenantId } }),
+
+            product.count({ where: { tenantId, status: "active" } }),
+
+            inventory.count({
+                where: {
+                    tenantId,
+                    quantity: {
+                        [Op.lte]: db.sequelize.col("reorderLevel"),
+                    },
+                },
+            }),
+        ]);
+
+    return {
+        total,
+        active,
+        inactive: total - active,
+        lowStock,
+    };
+}

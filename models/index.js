@@ -3,10 +3,9 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import process from "process";
 import Sequelize from "sequelize";
 
-import databaseConfig from "../config/database.js";
+import config from "../config/index.js";
 
 const { DataTypes } = Sequelize;
 
@@ -19,12 +18,6 @@ const __dirname =
 const basename =
     path.basename(__filename);
 
-const env =
-    process.env.NODE_ENV || "development";
-
-const config =
-    databaseConfig[env];
-
 const db = {};
 
 let sequelize;
@@ -34,26 +27,13 @@ let sequelize;
 // DATABASE
 // =====================================================
 
-if (config.use_env_variable) {
-
-    sequelize =
-        new Sequelize.Sequelize(
-            process.env[
-                config.use_env_variable
-            ],
-            config
-        );
-
-} else {
-
-    sequelize =
-        new Sequelize.Sequelize(
-            config.database,
-            config.username,
-            config.password,
-            config
-        );
-}
+sequelize =
+    new Sequelize.Sequelize(
+        config.db.database,
+        config.db.username,
+        config.db.password,
+        config.db
+    );
 
 // =====================================================
 // LOAD MODELS
@@ -75,10 +55,6 @@ const files = fs
 for (const file of files) {
 
     try {
-
-        console.log(
-            `Loading model: ${file}`
-        );
 
         const module =
             await import(
@@ -108,10 +84,6 @@ for (const file of files) {
         db[model.name] =
             model;
 
-        console.log(
-            `Model loaded: ${model.name}`
-        );
-
     } catch (error) {
 
         console.error(
@@ -128,21 +100,10 @@ for (const file of files) {
 // CHECK MODELS
 // =====================================================
 
-console.log(
-    "\nLoaded models:"
-);
-
-console.log(
-    Object.keys(db)
-);
 
 // =====================================================
 // ASSOCIATIONS
 // =====================================================
-
-console.log(
-    "\nSetting up associations..."
-);
 
 for (
     const modelName of Object.keys(db)
@@ -157,10 +118,6 @@ for (
     ) {
 
         try {
-
-            console.log(
-                `Associating: ${modelName}`
-            );
 
             model.associate(db);
 
@@ -186,23 +143,6 @@ db.sequelize =
 
 db.Sequelize =
     Sequelize;
-
-// =====================================================
-// DEBUG ASSOCIATIONS
-// =====================================================
-
-console.log(
-    "\nProduct associations:"
-);
-
-if (db.product) {
-
-    console.log(
-        Object.keys(
-            db.product.associations
-        )
-    );
-}
 
 // =====================================================
 // EXPORT

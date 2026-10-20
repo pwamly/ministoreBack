@@ -1,27 +1,61 @@
 "use strict";
 
+// Everything here runs after isAuth (see controller/index.js), so
+// req.user / req.tenantId / req.permissions are always set.
+// Every route declares the permission it needs.
+
 import { Router } from "express";
-import isAdmin from "../middleware/auth/isAdmin.js";
+
+import { can, requireTenant } from "../middleware/auth/authorize.js";
+import { PERMISSIONS as P } from "../config/permissions.js";
+import { sessionProfile } from "../services/auth.js";
+
 import regProduct from "./products/registerProduct.js";
 import products from "./products/getProducts.js";
+import editProduct from "./products/editProduct.js";
+import unregisteredItems from "./products/unregisteredItems.js";
+import catalog from "./products/catalog.js";
 import regSales from "./sales/regSales.js";
 import sales from "./sales/sales.js";
-import editProduct from "./products/editProduct.js";
-import loanPayment from "./loans/loanPayment.js";
-import getLoanPayments from "./loans/getLoanPayments.js";
-// import users from "./users";
+import loans from "./loans/index.js";
+import inventory from "./inventory/index.js";
+import suppliers from "./inventory/suppliers.js";
+import expenses from "./expenses/index.js";
+import users from "./users/index.js";
+import tenant from "./tenant/index.js";
+import platform from "./platform/index.js";
 
 const api = Router();
 
-api.post("/product-reg", regProduct);
-api.get("/getProducts", products);
-api.put("/products/:id", editProduct);
+// Current user's profile + permissions (frontend session bootstrap).
+api.get("/me", (req, res) =>
+    res.json({ successful: true, profile: sessionProfile(req.user, req.tenant) })
+);
 
-// sales
-api.post("/reg-sales", regSales);
-api.get("/get-sales", sales);
+// SaaS operator - not inside any store.
+api.use(platform);
 
-// loan payments
-api.post("/loan-payment", loanPayment);
-api.get("/loan-payments", getLoanPayments);
+// Everything below is store data.
+api.use(requireTenant);
+
+// products
+api.post("/product-reg", can(P.PRODUCTS_MANAGE), regProduct);
+api.post("/registerProduct", can(P.PRODUCTS_MANAGE), regProduct); // name used by the frontend
+api.get("/getProducts", can(P.PRODUCTS_VIEW), products);
+api.put("/products/:id", can(P.PRODUCTS_MANAGE), editProduct);
+
+// sales / checkout
+api.post("/reg-sales", can(P.SALES_CREATE), regSales);
+api.get("/get-sales", can(P.SALES_VIEW), sales);
+
+// modules (each router checks its own permissions)
+api.use(unregisteredItems);
+api.use(catalog);
+api.use(loans);
+api.use(inventory);
+api.use(suppliers);
+api.use(expenses);
+api.use(users);
+api.use(tenant);
+
 export default api;

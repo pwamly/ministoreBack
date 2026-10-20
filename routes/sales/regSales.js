@@ -2,12 +2,21 @@
 
 import { v4 as uuidv4 } from "uuid";
 import db from "../../models/index.js";
+import { applyStockChange } from "../../services/stock.js";
+import { tenantModules } from "../../services/auth.js";
+import { MODULES, PERMISSIONS } from "../../config/permissions.js";
+import { has } from "../../middleware/auth/authorize.js";
+import { STOCK_MOVEMENT_TYPES } from "../../models/stockMovement.js";
+import { UNREGISTERED_STATUS, matchKeyFor } from "../../models/unregisteredItem.js";
 
 const {
     sequelize,
     sales,
     salesItems,
     product,
+    productdetails,
+    productbarcode,
+    unregisteredItem,
 } = db;
 
 export default async (req, res) => {
@@ -18,7 +27,6 @@ export default async (req, res) => {
             invoiceNumber,
             customerName,
             customerMobile,
-            userId,
             paymentMethod,
             subtotal,
             tax,
@@ -28,7 +36,14 @@ export default async (req, res) => {
             changeAmount,
             status,
             items,
+            loanDueDate,
         } = req.body;
+
+        // The cashier is whoever is logged in - never trust a
+        // userId sent by the browser.
+        const userId = req.user.id;
+        const tenantId = req.tenantId;
+        const modules = tenantModules(req.tenant);
 
         // =====================================================
         // VALIDATE MODELS
@@ -272,6 +287,25 @@ export default async (req, res) => {
             });
         }
 
+        if (
+            cleanPaymentMethod === "loan" &&
+            !modules.includes(MODULES.LOANS)
+        ) {
+            return res.status(403).json({
+                successful: false,
+                code: "PLAN_MODULE",
+                message:
+                    "Loan sales are not included in your subscription plan",
+            });
+        }
+
+        const cleanLoanDueDate =
+            cleanPaymentMethod === "loan" &&
+            typeof loanDueDate === "string" &&
+            /^\d{4}-\d{2}-\d{2}$/.test(loanDueDate)
+                ? loanDueDate
+                : null;
+
         // =====================================================
         // LOAN CUSTOMER VALIDATION
         // =====================================================
@@ -295,6 +329,7 @@ export default async (req, res) => {
         const existingSale =
             await sales.findOne({
                 where: {
+                    tenantId,
                     invoiceNumber:
                         cleanInvoiceNumber,
                 },
@@ -315,7 +350,40 @@ export default async (req, res) => {
 
         for (const item of items) {
 
-            if (!item.productId) {
+            // Manual item: sold by name/price, not in the product list.
+            if (item.manual) {
+                if (
+                    !item.productName ||
+                    !String(item.productName).trim()
+                ) {
+                    return res.status(400).json({
+                        successful: false,
+                        message:
+                            "Items not in the system need a name",
+                    });
+                }
+
+                if (!(Number(item.unitPrice) > 0)) {
+                    return res.status(400).json({
+                        successful: false,
+                        message:
+                            `Enter a selling price for ${String(item.productName).trim()}`,
+                    });
+                }
+
+                if (
+                    item.costPrice !== undefined &&
+                    item.costPrice !== null &&
+                    item.costPrice !== "" &&
+                    !(Number(item.costPrice) >= 0)
+                ) {
+                    return res.status(400).json({
+                        successful: false,
+                        message:
+                            `Cost price for ${String(item.productName).trim()} must be 0 or more`,
+                    });
+                }
+            } else if (!item.productId) {
                 return res.status(400).json({
                     successful: false,
                     message:
@@ -328,9 +396,6 @@ export default async (req, res) => {
 
             const unitPrice =
                 Number(item.unitPrice);
-
-            const costPrice =
-                Number(item.costPrice);
 
             if (
                 !Number.isFinite(quantity) ||
@@ -354,16 +419,6 @@ export default async (req, res) => {
                 });
             }
 
-            if (
-                !Number.isFinite(costPrice) ||
-                costPrice < 0
-            ) {
-                return res.status(400).json({
-                    successful: false,
-                    message:
-                        "Every item must have a valid cost price",
-                });
-            }
         }
 
         // =====================================================
@@ -375,6 +430,139 @@ export default async (req, res) => {
                 async (transaction) => {
 
                     const saleId = uuidv4();
+
+                    // -------------------------------------------------
+                    // LINE RESOLVERS
+                    // -------------------------------------------------
+
+                    const resolveProductLine = async (item, unitPrice) => {
+                        const existingProduct =
+                            await product.findOne({
+                                where: {
+                                    id: item.productId,
+                                    tenantId,
+                                },
+                                include: [
+                                    {
+                                        model: productdetails,
+                                        as: "details",
+                                        required: false,
+                                    },
+                                ],
+                                transaction,
+                            });
+
+                        if (!existingProduct) {
+                            throw new Error(
+                                `Product not found: ${item.productId}`
+                            );
+                        }
+
+                        const minimumPrice =
+                            Number(
+                                existingProduct.details?.minimumSellingPrice || 0
+                            );
+
+                        if (
+                            minimumPrice > 0 &&
+                            unitPrice < minimumPrice
+                        ) {
+                            throw new Error(
+                                `Price for ${existingProduct.itemName} is below the minimum selling price of ${minimumPrice}`
+                            );
+                        }
+
+                        // Cost comes from the product record, not
+                        // the browser, so profit cannot be faked.
+                        return {
+                            productId: existingProduct.id,
+                            unregisteredItemId: null,
+                            costPrice: Number(existingProduct.details?.costPrice || 0),
+                            name: item.productName || existingProduct.itemName,
+                        };
+                    };
+
+                    // Records the item for a manager to register later.
+                    // Repeat sales of the same item add up on one row.
+                    const resolveManualLine = async (item, quantity, unitPrice) => {
+                        const name = String(item.productName).trim();
+
+                        const barcode =
+                            item.barcode && String(item.barcode).trim()
+                                ? String(item.barcode).trim()
+                                : null;
+
+                        const cost =
+                            item.costPrice !== undefined &&
+                            item.costPrice !== null &&
+                            item.costPrice !== ""
+                                ? Number(item.costPrice)
+                                : null;
+
+                        if (barcode) {
+                            const known = await productbarcode.findOne({
+                                where: { tenantId, barcode },
+                                transaction,
+                            });
+
+                            if (known) {
+                                const owner = await product.findByPk(known.productId, { transaction });
+
+                                throw new Error(
+                                    `Barcode ${barcode} belongs to ${owner?.itemName || "a registered product"}. Add it from the product search`
+                                );
+                            }
+                        }
+
+                        const matchKey = matchKeyFor({ barcode, name });
+
+                        let row = await unregisteredItem.findOne({
+                            where: {
+                                tenantId,
+                                matchKey,
+                                status: UNREGISTERED_STATUS.PENDING,
+                            },
+                            transaction,
+                            lock: transaction.LOCK.UPDATE,
+                        });
+
+                        if (row) {
+                            await row.update(
+                                {
+                                    sellingPrice: unitPrice,
+                                    costPrice: cost ?? row.costPrice,
+                                    quantitySold: Number(row.quantitySold) + quantity,
+                                    timesSold: row.timesSold + 1,
+                                    lastSoldAt: date,
+                                },
+                                { transaction }
+                            );
+                        } else {
+                            row = await unregisteredItem.create(
+                                {
+                                    tenantId,
+                                    name,
+                                    barcode,
+                                    matchKey,
+                                    sellingPrice: unitPrice,
+                                    costPrice: cost,
+                                    quantitySold: quantity,
+                                    timesSold: 1,
+                                    lastSoldAt: date,
+                                    status: UNREGISTERED_STATUS.PENDING,
+                                    createdBy: userId,
+                                },
+                                { transaction }
+                            );
+                        }
+
+                        return {
+                            productId: null,
+                            unregisteredItemId: row.id,
+                            costPrice: cost,
+                            name,
+                        };
+                    };
 
                     // =================================================
                     // CALCULATE SALE TOTALS
@@ -392,36 +580,22 @@ export default async (req, res) => {
 
                     for (const item of items) {
 
-                        // ---------------------------------------------
-                        // VERIFY PRODUCT
-                        // ---------------------------------------------
-
-                        const existingProduct =
-                            await product.findOne({
-                                where: {
-                                    id: item.productId,
-                                },
-                                transaction,
-                            });
-
-                        if (!existingProduct) {
-                            throw new Error(
-                                `Product not found: ${item.productId}`
-                            );
-                        }
-
-                        // ---------------------------------------------
-                        // NORMALIZE ITEM
-                        // ---------------------------------------------
-
                         const quantity =
                             Number(item.quantity);
 
                         const unitPrice =
                             Number(item.unitPrice);
 
+                        // Product line or manual (unregistered) line.
+                        const line =
+                            item.manual
+                                ? await resolveManualLine(item, quantity, unitPrice)
+                                : await resolveProductLine(item, unitPrice);
+
+                        // NULL when a manual item has no cost entered:
+                        // its profit is unknown, counted as 0.
                         const costPrice =
-                            Number(item.costPrice);
+                            line.costPrice;
 
                         // ---------------------------------------------
                         // CALCULATE ITEM SUBTOTAL
@@ -436,11 +610,13 @@ export default async (req, res) => {
                         // ---------------------------------------------
 
                         const itemProfit =
-                            (
-                                unitPrice -
-                                costPrice
-                            ) *
-                            quantity;
+                            costPrice === null
+                                ? 0
+                                : (
+                                    unitPrice -
+                                    costPrice
+                                ) *
+                                quantity;
 
                         // ---------------------------------------------
                         // ADD TO SALE TOTALS
@@ -476,7 +652,7 @@ export default async (req, res) => {
                                 )
                             ) {
                                 throw new Error(
-                                    `Invalid subtotal for product ${item.productId}`
+                                    `Invalid subtotal for ${line.name}`
                                 );
                             }
 
@@ -487,7 +663,7 @@ export default async (req, res) => {
                                 ) > 0.01
                             ) {
                                 throw new Error(
-                                    `Invalid subtotal for product ${item.productId}. Expected ${itemSubtotal}, received ${suppliedItemSubtotal}`
+                                    `Invalid subtotal for ${line.name}. Expected ${itemSubtotal}, received ${suppliedItemSubtotal}`
                                 );
                             }
                         }
@@ -499,8 +675,13 @@ export default async (req, res) => {
                             saleId:
                                 saleId,
 
+                            tenantId,
+
                             productId:
-                                item.productId,
+                                line.productId,
+
+                            unregisteredItemId:
+                                line.unregisteredItemId,
 
                             sku:
                                 item.sku ||
@@ -511,8 +692,7 @@ export default async (req, res) => {
                                 null,
 
                             productName:
-                                item.productName ||
-                                null,
+                                line.name,
 
                             quantity:
                                 quantity,
@@ -767,6 +947,8 @@ export default async (req, res) => {
                                 id:
                                     saleId,
 
+                                tenantId,
+
                                 invoiceNumber:
                                     cleanInvoiceNumber,
 
@@ -807,6 +989,9 @@ export default async (req, res) => {
 
                                 status:
                                     cleanStatus,
+
+                                loanDueDate:
+                                    cleanLoanDueDate,
 
                                 createdAt:
                                     date,
@@ -849,6 +1034,32 @@ export default async (req, res) => {
                         createdItems.push(
                             createdItem
                         );
+
+                        // ---------------------------------------------
+                        // DEDUCT STOCK
+                        // ---------------------------------------------
+
+                        // Manual items have no stock record.
+                        if (
+                            item.productId &&
+                            modules.includes(MODULES.INVENTORY)
+                        ) {
+                            await applyStockChange({
+                                tenantId,
+                                productId: item.productId,
+                                delta: -Number(item.quantity),
+                                type: STOCK_MOVEMENT_TYPES.SALE,
+                                userId,
+                                allowNegative:
+                                    Boolean(req.tenant?.allowNegativeStock),
+                                productName: item.productName,
+                                unitCost: item.costPrice,
+                                referenceType: "sale",
+                                referenceId: saleId,
+                                note: cleanInvoiceNumber,
+                                transaction,
+                            });
+                        }
                     }
 
                     // =================================================
@@ -887,7 +1098,7 @@ export default async (req, res) => {
         // SUCCESS
         // =====================================================
 
-        return res.status(201).json({
+        return res.status(201).json(hideProfit(req, {
             successful: true,
 
             message:
@@ -1025,7 +1236,7 @@ export default async (req, res) => {
                         })
                     ),
             },
-        });
+        }));
 
     } catch (error) {
 
@@ -1037,6 +1248,14 @@ export default async (req, res) => {
             "Sale registration error:",
             error
         );
+
+        if (error.status && error.status < 500) {
+            return res.status(error.status).json({
+                successful: false,
+                message: error.message,
+                ...error.extra,
+            });
+        }
 
         // =====================================================
         // SEQUELIZE VALIDATION ERROR
@@ -1100,7 +1319,7 @@ export default async (req, res) => {
             "Invalid sale subtotal",
             "Invalid sale total",
             "Invalid change amount",
-            "Invalid subtotal for product",
+            "Invalid subtotal for",
             "Cash given is required",
             "Cash given is less than the sale total",
             "Cash given should only be provided",
@@ -1109,6 +1328,8 @@ export default async (req, res) => {
             "Paid now cannot be greater than the sale total",
             "Invalid paid now amount",
             "Customer name or customer mobile is required for loan sales",
+            "is below the minimum selling price",
+            "Add it from the product search",
         ];
 
         const isValidationError =
@@ -1144,3 +1365,18 @@ export default async (req, res) => {
         });
     }
 };
+
+// Cashiers see what they sold, not what it cost the store.
+function hideProfit(req, body) {
+    if (has(req, PERMISSIONS.SALES_VIEW_PROFIT)) {
+        return body;
+    }
+
+    delete body.data.totalProfit;
+
+    body.data.items = body.data.items.map(
+        ({ costPrice, profit, ...item }) => item
+    );
+
+    return body;
+}

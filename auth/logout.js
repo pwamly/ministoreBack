@@ -1,33 +1,46 @@
 "use strict";
 
-import db from "../models/index.js";
+import jwt from "jsonwebtoken";
 
-import {} from "./revokeRefreshToken.js";
-import pkg from "jsonwebtoken";
-const { verify } = pkg;
+import config from "../config/index.js";
+import db from "../models/index.js";
+import { clearRefreshToken } from "../services/auth.js";
+
+const { verify } = jwt;
 const { min_user } = db;
 
+/**
+ * Ends every session of the user: bumping token_version
+ * invalidates all their access and refresh tokens.
+ *
+ * Accepts the access token in the body (`token`) or the
+ * Authorization header; an expired token is still accepted
+ * here so logout always works.
+ */
 export default async (req, res) => {
-  const { token } = req.body;
-  try {
-    const payload = verify(token, process.env.ACCESSTOKEN_SECRETE);
-    const { id } = payload;
+    const header = req.headers.authorization;
+    const token = req.body?.token || (header && header.split(" ")[1]);
 
-    let { token_version } = await min_user.findOne({ where: { id: id } });
-    const user = await min_user.update(
-      { token_version: token_version + 1 },
-      { where: { id: id } },
-    );
-    if (user) {
-      res.clearCookie("jto", {
-        httpOnly: true,
-        secure: true,
-      });
+    clearRefreshToken(res);
 
-      return res.status(200).json({ successful: true });
+    if (!token) {
+        return res.status(200).json({ successful: true });
     }
-  } catch (error) {
-    console.log(error);
-    return res.status(401).json({ successful: false });
-  }
+
+    try {
+        const payload = verify(token, config.auth.accessTokenSecret, { ignoreExpiration: true });
+
+        const user = await min_user.findByPk(payload.id);
+
+        if (user && (user.token_version ?? 0) === (payload.token_version ?? 0)) {
+            await user.update({
+                token_version: (user.token_version ?? 0) + 1,
+                refresh_token: null,
+            });
+        }
+    } catch (error) {
+        // Invalid token: nothing to revoke, the cookie is already cleared.
+    }
+
+    return res.status(200).json({ successful: true });
 };

@@ -1,54 +1,68 @@
 "use strict";
-import dotenv from "dotenv";
-import { db } from "../models/index.js";
-const { min_user } = db;
 
-import pkg from 'jsonwebtoken';
-import createAcessToken from "./createAcessToken.js";
-import createRereshToken from "../auth/createRefreshToken.js";
-import sendRefreshToken from "./sendRefreshToken.js";
-dotenv.config();
-const { verify } = pkg;
+import jwt from "jsonwebtoken";
 
-export default async(req, res) => {
-    const { jto: token } = req.cookies;
+import config from "../config/index.js";
+import db from "../models/index.js";
+import {
+    createAccessToken,
+    createRefreshToken,
+    sendRefreshToken,
+    clearRefreshToken,
+    sessionProfile,
+} from "../services/auth.js";
+
+const { verify } = jwt;
+const { min_user, tenant: Tenant, plan: Plan } = db;
+
+const reject = (res) => {
+    clearRefreshToken(res);
+
+    return res.status(401).json({ successful: false, AccessToken: "" });
+};
+
+export default async (req, res) => {
+    const token = req.cookies?.[config.auth.cookie.name];
 
     if (!token) {
-        console.log("refresh token not sent from cookies");
-        res.statusMessage = "NO TOKEN";
-        return res.status(401).json({ successful: false, AccessToken: "" });
+        return reject(res);
     }
-    let payload = null;
+
+    let payload;
+
     try {
-        payload = verify(token, process.env.REFRESHTOKEN_SECRETE);
+        payload = verify(token, config.auth.refreshTokenSecret);
+    } catch {
+        return reject(res);
+    }
+
+    try {
+        const user = await min_user.findByPk(payload.id);
+
+        if (
+            !user ||
+            user.status !== "active" ||
+            (user.token_version ?? 0) !== (payload.token_version ?? 0)
+        ) {
+            return reject(res);
+        }
+
+        const tenant = user.tenantId
+            ? await Tenant.findByPk(user.tenantId, { include: [{ model: Plan, as: "plan" }] })
+            : null;
+
+        sendRefreshToken(res, await createRefreshToken(user));
+
+        // Role and permissions come from the DB, so a refreshed
+        // session always reflects the user's current role.
+        return res.status(200).json({
+            successful: true,
+            AccessToken: createAccessToken(user),
+            profile: sessionProfile(user, tenant),
+        });
     } catch (error) {
-        console.log(error);
-        if (error)
-            return res.status(401).json({ successful: false, AccessToken: "" });
+        console.error("REFRESH ERROR:", error);
+
+        return res.status(500).json({ successful: false, AccessToken: "" });
     }
-
-    const user = await min_user.findOne({ where: { id: payload.id } });
-
-    if (!user) {
-        console.log("token not exist in db");
-        return res.status(401).json({ successful: false, AccessToken: "" });
-    }
-
-    if (user.token_version !== payload.token_version) {
-        console.log(
-            "token version not match",
-            user.token_version,
-            payload.token_version
-        );
-        return res.status(401).json({ successful: false, AccessToken: "" });
-    }
-
-    const { id, first_name, last_name, username, email, token_version } = user;
-    const profile = { id, first_name, last_name, username, email };
-
-    sendRefreshToken(res, await createRereshToken({ id, token_version }, db));
-
-    return res
-        .status(200)
-        .json({ successful: true, AccessToken: createAcessToken(profile) });
 };

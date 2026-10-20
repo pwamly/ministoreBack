@@ -2,6 +2,8 @@
 
 import { Op } from "sequelize";
 import db from "../../models/index.js";
+import { has } from "../../middleware/auth/authorize.js";
+import { PERMISSIONS } from "../../config/permissions.js";
 
 const {
   sales,
@@ -394,7 +396,15 @@ export default async (req, res) => {
     // BUILD SALE WHERE
     // =====================================================
 
-    const saleWhere = {};
+    // Always this store; without sales.view_all (cashiers) only
+    // the user's own sales.
+    const saleWhere = {
+      tenantId: req.tenantId,
+
+      ...(has(req, PERMISSIONS.SALES_VIEW_ALL)
+        ? {}
+        : { userId: req.user.id }),
+    };
 
     // =====================================================
     // DATE FILTER
@@ -941,6 +951,9 @@ export default async (req, res) => {
           paidNow:
             salePaidNow,
 
+          loanDueDate:
+            sale.loanDueDate || null,
+
           remainingBalance:
             remainingBalance,
 
@@ -1017,6 +1030,10 @@ export default async (req, res) => {
 
                 productId:
                   item.productId,
+
+                // Sold manually; not (yet) a registered product
+                unregistered:
+                  !item.productId,
 
                 sku:
                   item.sku,
@@ -1223,7 +1240,7 @@ export default async (req, res) => {
     // SUCCESS
     // =====================================================
 
-    return res.status(200).json({
+    return res.status(200).json(hideProfit(req, {
       successful: true,
 
       message:
@@ -1349,7 +1366,7 @@ export default async (req, res) => {
 
       data:
         formattedSales,
-    });
+    }));
   } catch (error) {
     console.error(
       "Get sales error:",
@@ -1368,3 +1385,22 @@ export default async (req, res) => {
     });
   }
 };
+
+// Strip cost/profit for users without sales.view_profit.
+function hideProfit(req, body) {
+  if (has(req, PERMISSIONS.SALES_VIEW_PROFIT)) {
+    return body;
+  }
+
+  delete body.summary.profit;
+
+  body.data = body.data.map(({ totalProfit, ...sale }) => ({
+    ...sale,
+
+    items: (sale.items || []).map(
+      ({ costPrice, profit, ...item }) => item
+    ),
+  }));
+
+  return body;
+}

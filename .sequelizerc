@@ -1,0 +1,14 @@
+// sequelize-cli settings. Uses the same .env / APP_ENV as the app,
+// so `npm run db:migrate` targets whichever environment is active.
+const path = require("path");
+const { APP_ENV } = require("./config/env.cjs");
+
+// sequelize-cli picks the config entry from NODE_ENV (unless --env is given).
+process.env.NODE_ENV = APP_ENV;
+
+module.exports = {
+    config: path.resolve("config", "database.cjs"),
+    "models-path": path.resolve("models"),
+    "seeders-path": path.resolve("seeders"),
+    "migrations-path": path.resolve("migrations"),
+};

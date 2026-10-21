@@ -95,7 +95,7 @@ router.get(
         const { search, status, categoryId } = req.query;
         const page = pagination(req.query, { defaultLimit: 25 });
 
-        const where = { tenantId };
+        const where = { tenantId, status: { [Op.ne]: "removed" } };
         const and = [];
 
         if (isProvided(search)) {

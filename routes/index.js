@@ -15,6 +15,7 @@ import products from "./products/getProducts.js";
 import editProduct from "./products/editProduct.js";
 import unregisteredItems from "./products/unregisteredItems.js";
 import catalog from "./products/catalog.js";
+import productActions from "./products/productActions.js";
 import regSales from "./sales/regSales.js";
 import sales from "./sales/sales.js";
 import loans from "./loans/index.js";
@@ -51,6 +52,7 @@ api.get("/get-sales", can(P.SALES_VIEW), sales);
 // modules (each router checks its own permissions)
 api.use(unregisteredItems);
 api.use(catalog);
+api.use(productActions);
 api.use(loans);
 api.use(inventory);
 api.use(suppliers);

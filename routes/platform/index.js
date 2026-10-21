@@ -21,6 +21,7 @@ import { PERMISSIONS, MODULES } from "../../config/permissions.js";
 import { createTenantWithOwner } from "../../services/tenantSetup.js";
 import { searchCatalog, formatCatalogItem } from "../products/catalog.js";
 import { catalogNameKey } from "../../models/catalogItem.js";
+import { applyCatalogToStores } from "../../services/catalog.js";
 import { subscriptionState } from "../../services/subscription.js";
 import { handler, badRequest, notFound, cleanString, isProvided, requireNumber } from "../../utils/http.js";
 
@@ -239,43 +240,111 @@ const CATALOG_TEXT_FIELDS = [
     "countryOfOrigin",
 ];
 
+// Shared lookups for the catalog editor (tenantId NULL only).
+router.get(
+    "/platform/lookups",
+    handler(async (req, res) => {
+        const options = { where: { tenantId: null }, attributes: ["id", "name"], order: [["name", "ASC"]] };
+
+        const [categories, brands, units] = await Promise.all([
+            db.category.findAll(options),
+            db.brand.findAll(options),
+            db.unit.findAll(options),
+        ]);
+
+        return res.json({ successful: true, data: { categories, brands, units } });
+    })
+);
+
+const LOOKUP_FIELDS = [
+    ["brandId", "brand"],
+    ["categoryId", "category"],
+    ["unitId", "unit"],
+];
+
+/**
+ * body: any catalog field, plus `applyToStores: true` to copy the
+ * changes onto every store product linked to this item.
+ */
 router.put(
     "/platform/catalog/:id",
     handler(async (req, res) => {
-        const item = await db.catalogItem.findByPk(req.params.id);
+        const result = await db.sequelize.transaction(async (transaction) => {
+            const item = await db.catalogItem.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
 
-        if (!item) {
-            throw notFound("Catalog item not found");
-        }
-
-        const changes = {};
-
-        for (const field of CATALOG_TEXT_FIELDS) {
-            if (req.body[field] !== undefined) {
-                changes[field] = cleanString(req.body[field]);
+            if (!item) {
+                throw notFound("Catalog item not found");
             }
-        }
 
-        if (changes.name === null) {
-            throw badRequest("Name cannot be empty");
-        }
+            const changes = {};
 
-        if (changes.name) {
-            changes.nameKey = catalogNameKey(changes.name);
-        }
+            for (const field of CATALOG_TEXT_FIELDS) {
+                if (req.body[field] !== undefined) {
+                    changes[field] = cleanString(req.body[field]);
+                }
+            }
 
-        if (req.body.netWeight !== undefined) {
-            changes.netWeight = req.body.netWeight === null || req.body.netWeight === "" ? null : requireNumber(req.body.netWeight, "Net weight", { min: 0 });
-        }
+            if (changes.name === null) {
+                throw badRequest("Name cannot be empty");
+            }
 
-        if (req.body.verified !== undefined) {
-            changes.verified = Boolean(req.body.verified);
-        }
+            if (changes.name) {
+                changes.nameKey = catalogNameKey(changes.name);
+            }
 
-        // Stores keep their own copies; edits apply to stores that add it from now on.
-        await item.update(changes);
+            if (req.body.netWeight !== undefined) {
+                changes.netWeight =
+                    req.body.netWeight === null || req.body.netWeight === ""
+                        ? null
+                        : requireNumber(req.body.netWeight, "Net weight", { min: 0 });
+            }
 
-        return res.json({ successful: true, data: formatCatalogItem(item) });
+            // Only shared (tenantId NULL) lookups belong in the catalog.
+            for (const [field, model] of LOOKUP_FIELDS) {
+                if (req.body[field] !== undefined) {
+                    if (!req.body[field]) {
+                        changes[field] = null;
+                    } else {
+                        const row = await db[model].findOne({ where: { id: req.body[field], tenantId: null }, transaction });
+
+                        if (!row) {
+                            throw badRequest(`Unknown ${model}`);
+                        }
+
+                        changes[field] = row.id;
+                    }
+                }
+            }
+
+            if (req.body.verified !== undefined) {
+                changes.verified = Boolean(req.body.verified);
+            }
+
+            // Fields whose value really changed.
+            const changed = Object.keys(changes).filter(
+                (field) => field !== "nameKey" && field !== "verified" && String(item[field] ?? "") !== String(changes[field] ?? "")
+            );
+
+            await item.update(changes, { transaction });
+
+            const applied = req.body.applyToStores && changed.length
+                ? await applyCatalogToStores({ item, changed, transaction })
+                : null;
+
+            return { item, applied };
+        });
+
+        await result.item.reload({ include: [
+            { model: db.brand, as: "brand", attributes: ["id", "name"], required: false },
+            { model: db.category, as: "category", attributes: ["id", "name"], required: false },
+            { model: db.unit, as: "unit", attributes: ["id", "name"], required: false },
+        ] });
+
+        return res.json({
+            successful: true,
+            data: formatCatalogItem(result.item),
+            applied: result.applied,
+        });
     })
 );
 

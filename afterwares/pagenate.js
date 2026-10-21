@@ -8,8 +8,7 @@ export default function paginate({
     data,
 }) {
     // calculate total pages
-    pageSize = 10;
-    let totalPages = Math.ceil(totalCount / pageSize);
+    let totalPages = Math.max(Math.ceil(totalCount / pageSize), 1);
 
     // ensure current page isn't out of range
     if (currentPage < 1) {

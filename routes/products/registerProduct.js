@@ -1,6 +1,7 @@
 "use strict";
 
 import { v4 as uuidv4 } from "uuid";
+import { Op } from "sequelize";
 import db from "../../models/index.js";
 import { applyStockChange } from "../../services/stock.js";
 import { linkProductToCatalog } from "../../services/catalog.js";
@@ -168,7 +169,7 @@ export default async (req, res) => {
 
         if (maxProducts) {
             const productCount = await product.count({
-                where: { tenantId },
+                where: { tenantId, status: { [Op.ne]: "removed" } },
             });
 
             if (productCount >= maxProducts) {

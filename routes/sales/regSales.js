@@ -458,6 +458,12 @@ export default async (req, res) => {
                             );
                         }
 
+                        if (existingProduct.status === "removed") {
+                            throw new Error(
+                                `${existingProduct.itemName} has been removed from this store`
+                            );
+                        }
+
                         const minimumPrice =
                             Number(
                                 existingProduct.details?.minimumSellingPrice || 0
@@ -1330,6 +1336,7 @@ export default async (req, res) => {
             "Customer name or customer mobile is required for loan sales",
             "is below the minimum selling price",
             "Add it from the product search",
+            "has been removed from this store",
         ];
 
         const isValidationError =

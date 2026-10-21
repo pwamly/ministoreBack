@@ -35,12 +35,15 @@ export default async (req, res) => {
     };
 
     const {
-        q,
         day,
         status,
         categoryId,
         brandId,
+        stock,
     } = req.query;
+
+    // The Products page sends `search`, checkout sends `q`.
+    const q = req.query.q ?? req.query.search;
 
     // =====================================================
     // PAGINATION
@@ -161,8 +164,46 @@ export default async (req, res) => {
         // STATUS
         // =====================================================
 
+        // Removed products only show when asked for.
         if (status) {
             where.status = status;
+        } else {
+            where.status = {
+                [Op.ne]: "removed",
+            };
+        }
+
+        // =====================================================
+        // STOCK LEVEL (in | low | out)
+        // =====================================================
+
+        if (["in", "low", "out"].includes(stock)) {
+            const stockCondition =
+                stock === "out"
+                    ? { quantity: { [Op.gt]: 0 } }
+                    : stock === "low"
+                      ? {
+                            quantity: { [Op.gt]: 0 },
+                            [Op.and]: db.sequelize.where(db.sequelize.col("quantity"), Op.lte, db.sequelize.col("reorderLevel")),
+                        }
+                      : {
+                            quantity: { [Op.gt]: 0 },
+                            [Op.and]: db.sequelize.where(db.sequelize.col("quantity"), Op.gt, db.sequelize.col("reorderLevel")),
+                        };
+
+            const stockIds = (
+                await inventory.findAll({
+                    where: { tenantId: req.tenantId, ...stockCondition },
+                    attributes: ["productId"],
+                    raw: true,
+                })
+            ).map((row) => row.productId);
+
+            // "out" = no stock record, or nothing on the shelf.
+            where.id =
+                stock === "out"
+                    ? { [Op.notIn]: stockIds.length ? stockIds : [""] }
+                    : { [Op.in]: stockIds.length ? stockIds : [""] };
         }
 
         // =====================================================
@@ -188,8 +229,11 @@ export default async (req, res) => {
         const currentPage =
             Number(page) || 1;
 
+        // limit=all returns every product (capped for safety).
         const pageSize =
-            Number(limit) || 10;
+            limit === "all"
+                ? 10000
+                : Math.min(Number(limit) || 10, 10000);
 
         const pageOffset =
             Number(offset) ||
@@ -468,12 +512,15 @@ export default async (req, res) => {
 
 async function productSummary(tenantId) {
 
-    const [total, active, lowStock] =
+    const [total, active, removed, lowStock] =
         await Promise.all([
-            product.count({ where: { tenantId } }),
+            product.count({ where: { tenantId, status: { [Op.ne]: "removed" } } }),
 
             product.count({ where: { tenantId, status: "active" } }),
 
+            product.count({ where: { tenantId, status: "removed" } }),
+
+            // Needs restocking: at or below the reorder level.
             inventory.count({
                 where: {
                     tenantId,
@@ -481,6 +528,14 @@ async function productSummary(tenantId) {
                         [Op.lte]: db.sequelize.col("reorderLevel"),
                     },
                 },
+                include: [
+                    {
+                        model: product,
+                        as: "product",
+                        attributes: [],
+                        where: { status: { [Op.ne]: "removed" } },
+                    },
+                ],
             }),
         ]);
 
@@ -488,6 +543,7 @@ async function productSummary(tenantId) {
         total,
         active,
         inactive: total - active,
+        removed,
         lowStock,
     };
 }

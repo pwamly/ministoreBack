@@ -19,7 +19,9 @@ import { can } from "../../middleware/auth/authorize.js";
 import { PERMISSIONS } from "../../config/permissions.js";
 import { catalogNameKey } from "../../models/catalogItem.js";
 import { createProduct } from "../../services/products.js";
-import { DETAIL_FIELDS, REGULATORY_FIELDS } from "../../services/catalog.js";
+import { DETAIL_FIELDS, REGULATORY_FIELDS, refreshStoreCount } from "../../services/catalog.js";
+import { applyStockChange } from "../../services/stock.js";
+import { STOCK_MOVEMENT_TYPES } from "../../models/stockMovement.js";
 import { handler, badRequest, HttpError, isProvided, pagination, paginationMeta } from "../../utils/http.js";
 
 const { sequelize, catalogItem, product, productbarcode, brand, category, unit } = db;
@@ -69,6 +71,10 @@ export const formatCatalogItem = (item) => ({
     name: item.name,
     barcode: item.barcode,
     description: item.description,
+    productType: item.productType,
+    brandId: item.brandId,
+    categoryId: item.categoryId,
+    unitId: item.unitId,
     brand: item.brand?.name || null,
     category: item.category?.name || null,
     unit: item.unit?.name || null,
@@ -100,7 +106,7 @@ router.get(
             ids.length
                 ? product.findAll({
                       where: { tenantId: req.tenantId, catalogItemId: ids },
-                      attributes: ["id", "catalogItemId"],
+                      attributes: ["id", "catalogItemId", "status"],
                       raw: true,
                   })
                 : [],
@@ -113,14 +119,24 @@ router.get(
                 : [],
         ]);
 
-        const inStoreById = Object.fromEntries(linked.map((row) => [row.catalogItemId, row.id]));
+        const inStoreById = Object.fromEntries(
+            linked.filter((row) => row.status !== "removed").map((row) => [row.catalogItemId, row.id])
+        );
+        const removedById = Object.fromEntries(
+            linked.filter((row) => row.status === "removed").map((row) => [row.catalogItemId, row.id])
+        );
         const inStoreByBarcode = Object.fromEntries(byBarcode.map((row) => [row.barcode, row.productId]));
 
         return res.json({
             successful: true,
             data: rows.map((row) => ({
                 ...formatCatalogItem(row),
-                inStoreProductId: inStoreById[row.id] || (row.barcode && inStoreByBarcode[row.barcode]) || null,
+                inStoreProductId:
+                    inStoreById[row.id] ||
+                    (!removedById[row.id] && row.barcode && inStoreByBarcode[row.barcode]) ||
+                    null,
+                // Removed from this store earlier: adding it again restores it.
+                removedProductId: removedById[row.id] || null,
             })),
             pagination: meta,
         });
@@ -161,6 +177,46 @@ const uniqueSku = async (tenantId, item, requested, transaction) => {
     return sku;
 };
 
+const restoreProduct = async ({ req, existing, line, transaction }) => {
+    const maxProducts = req.tenant?.plan?.maxProducts;
+
+    if (maxProducts) {
+        const count = await product.count({ where: { tenantId: req.tenantId, status: { [Op.ne]: "removed" } }, transaction });
+
+        if (count >= maxProducts) {
+            throw new HttpError(403, `Your plan allows ${maxProducts} products. Upgrade to add more.`, { code: "PLAN_LIMIT" });
+        }
+    }
+
+    await existing.update({ status: "active" }, { transaction });
+
+    const details = await db.productdetails.findOne({ where: { productId: existing.id }, transaction });
+    const priceChanges = { sellingPrice: Number(line.sellingPrice) };
+
+    if (isProvided(line.costPrice)) priceChanges.costPrice = Number(line.costPrice);
+    if (isProvided(line.minimumSellingPrice)) priceChanges.minimumSellingPrice = Number(line.minimumSellingPrice);
+
+    if (details) {
+        await details.update(priceChanges, { transaction });
+    }
+
+    // "Stock now" sets the shelf count (it may have changed while removed).
+    if (isProvided(line.openingStock)) {
+        await applyStockChange({
+            tenantId: req.tenantId,
+            productId: existing.id,
+            setTo: Number(line.openingStock),
+            type: STOCK_MOVEMENT_TYPES.ADJUSTMENT,
+            userId: req.user.id,
+            note: "Stock count when added back to the store",
+            allowNegative: true,
+            transaction,
+        });
+    }
+
+    await refreshStoreCount(existing.catalogItemId, transaction);
+};
+
 router.post(
     "/catalog/add-to-store",
     can(PERMISSIONS.PRODUCTS_MANAGE),
@@ -190,12 +246,19 @@ router.post(
                     transaction,
                 });
 
-                if (already) {
+                if (!(Number(line.sellingPrice) > 0)) {
+                    throw badRequest(`Enter a selling price for ${item.name}`);
+                }
+
+                if (already && already.status !== "removed") {
                     throw new HttpError(409, `${item.name} is already in your store`);
                 }
 
-                if (!(Number(line.sellingPrice) > 0)) {
-                    throw badRequest(`Enter a selling price for ${item.name}`);
+                // Previously removed: put it back with the new prices.
+                if (already) {
+                    await restoreProduct({ req, existing: already, line, transaction });
+                    results.push({ catalogItemId: item.id, productId: already.id, name: already.itemName, sku: already.sku, restored: true });
+                    continue;
                 }
 
                 const newProduct = await createProduct({
@@ -230,7 +293,9 @@ router.post(
 
         return res.status(201).json({
             successful: true,
-            message: `${created.length} product${created.length === 1 ? "" : "s"} added to your store`,
+            message: `${created.length} product${created.length === 1 ? "" : "s"} added to your store${
+                created.some((row) => row.restored) ? " (removed ones restored)" : ""
+            }`,
             data: created,
         });
     })

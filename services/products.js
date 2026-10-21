@@ -1,6 +1,7 @@
 "use strict";
 
 import { v4 as uuidv4 } from "uuid";
+import { Op } from "sequelize";
 
 import db from "../models/index.js";
 import { applyStockChange } from "./stock.js";
@@ -44,7 +45,9 @@ export const createProduct = async ({ tenant, userId, data, transaction }) => {
 
     const maxProducts = tenant.plan?.maxProducts;
 
-    if (maxProducts && (await db.product.count({ where: { tenantId }, transaction })) >= maxProducts) {
+    const activeCount = await db.product.count({ where: { tenantId, status: { [Op.ne]: "removed" } }, transaction });
+
+    if (maxProducts && activeCount >= maxProducts) {
         throw new HttpError(403, `Your plan allows ${maxProducts} products. Upgrade to add more.`, { code: "PLAN_LIMIT" });
     }
 

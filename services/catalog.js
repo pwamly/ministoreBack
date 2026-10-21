@@ -26,7 +26,10 @@ export const refreshStoreCount = async (catalogItemId, transaction) => {
 
     await db.sequelize.query(
         `UPDATE catalogItems
-            SET storeCount = (SELECT COUNT(DISTINCT tenantId) FROM products WHERE catalogItemId = :id)
+            SET storeCount = (
+                SELECT COUNT(DISTINCT tenantId) FROM products
+                 WHERE catalogItemId = :id AND status <> 'removed'
+            )
           WHERE id = :id`,
         { replacements: { id: catalogItemId }, transaction }
     );
@@ -75,4 +78,82 @@ export const linkProductToCatalog = async ({ product, barcode, barcodeType, tran
     await refreshStoreCount(item.id, transaction);
 
     return item;
+};
+
+/**
+ * Copy changed catalog fields onto every store product linked to the
+ * item (prices, stock and SKU are never touched).
+ *
+ * A new barcode is skipped for a store that already uses it on a
+ * different product.
+ *
+ * @returns {{ products: number, barcodeSkipped: string[] }} store names skipped
+ */
+export const applyCatalogToStores = async ({ item, changed, transaction }) => {
+    const linked = await db.product.findAll({ where: { catalogItemId: item.id }, transaction });
+    const barcodeSkipped = [];
+
+    const productChanges = {};
+
+    if (changed.includes("name")) {
+        productChanges.itemName = item.name;
+        productChanges.productName = item.name;
+    }
+
+    for (const field of ["description", "productType", "brandId", "categoryId", "unitId"]) {
+        if (changed.includes(field)) productChanges[field] = item[field];
+    }
+
+    const detailChanges = Object.fromEntries(DETAIL_FIELDS.filter((f) => changed.includes(f)).map((f) => [f, item[f]]));
+    const regulatoryChanges = Object.fromEntries(REGULATORY_FIELDS.filter((f) => changed.includes(f)).map((f) => [f, item[f]]));
+
+    for (const storeProduct of linked) {
+        if (Object.keys(productChanges).length) {
+            await storeProduct.update(productChanges, { transaction });
+        }
+
+        if (Object.keys(detailChanges).length) {
+            await db.productdetails.update(detailChanges, { where: { productId: storeProduct.id }, transaction });
+        }
+
+        if (Object.keys(regulatoryChanges).length) {
+            await db.productregulatory.update(regulatoryChanges, { where: { productId: storeProduct.id }, transaction });
+        }
+
+        if (changed.includes("barcode") && item.barcode) {
+            const clash = await db.productbarcode.findOne({
+                where: { tenantId: storeProduct.tenantId, barcode: item.barcode },
+                transaction,
+            });
+
+            if (clash && clash.productId !== storeProduct.id) {
+                const store = await db.tenant.findByPk(storeProduct.tenantId, { transaction });
+                barcodeSkipped.push(store?.name || storeProduct.tenantId);
+                continue;
+            }
+
+            const primary = await db.productbarcode.findOne({
+                where: { productId: storeProduct.id },
+                order: [["isPrimary", "DESC"]],
+                transaction,
+            });
+
+            if (primary) {
+                await primary.update({ barcode: item.barcode, barcodeType: item.barcodeType || primary.barcodeType }, { transaction });
+            } else {
+                await db.productbarcode.create(
+                    {
+                        tenantId: storeProduct.tenantId,
+                        productId: storeProduct.id,
+                        barcode: item.barcode,
+                        barcodeType: item.barcodeType || "EAN-13",
+                        isPrimary: true,
+                    },
+                    { transaction }
+                );
+            }
+        }
+    }
+
+    return { products: linked.length, barcodeSkipped };
 };

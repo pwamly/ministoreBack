@@ -21,6 +21,7 @@ const {
     unit,
     taxgroup,
     inventory,
+    productregulatory,
 } = db;
 
 // =====================================================
@@ -379,6 +380,22 @@ export default async (req, res) => {
                     as: "barcodes",
 
                     required: false,
+                },
+
+                // =================================================
+                // MANUFACTURER / ORIGIN (for the edit form)
+                // =================================================
+
+                {
+                    model: productregulatory,
+                    as: "regulatory",
+
+                    required: false,
+
+                    attributes: [
+                        "manufacturer",
+                        "countryOfOrigin",
+                    ],
                 },
 
                 // =================================================

@@ -41,6 +41,7 @@ export default async (req, res) => {
         categoryId,
         brandId,
         stock,
+        margin,
     } = req.query;
 
     // The Products page sends `search`, checkout sends `q`.
@@ -174,6 +175,9 @@ export default async (req, res) => {
             };
         }
 
+        // Product-id restrictions from the stock / profit filters.
+        const idFilters = [];
+
         // =====================================================
         // STOCK LEVEL (in | low | out)
         // =====================================================
@@ -201,10 +205,49 @@ export default async (req, res) => {
             ).map((row) => row.productId);
 
             // "out" = no stock record, or nothing on the shelf.
-            where.id =
+            idFilters.push(
                 stock === "out"
                     ? { [Op.notIn]: stockIds.length ? stockIds : [""] }
-                    : { [Op.in]: stockIds.length ? stockIds : [""] };
+                    : { [Op.in]: stockIds.length ? stockIds : [""] }
+            );
+        }
+
+        // =====================================================
+        // PROFIT PER UNIT (selling - cost)
+        // =====================================================
+        //
+        // loss       selling < cost
+        // zero       selling = cost
+        // lossOrZero selling <= cost
+        // noCost     no cost price entered (profit unknown)
+        //
+        // Needs cost visibility, otherwise a cashier could work out
+        // buying prices from the filter results.
+
+        const MARGIN_CONDITIONS = {
+            loss: "sellingPrice < costPrice",
+            zero: "sellingPrice = costPrice AND costPrice > 0",
+            lossOrZero: "sellingPrice <= costPrice AND costPrice > 0",
+            noCost: "(costPrice IS NULL OR costPrice = 0)",
+        };
+
+        if (MARGIN_CONDITIONS[margin] && has(req, PERMISSIONS.PRODUCTS_VIEW_COST)) {
+            const marginIds = (
+                await productdetails.findAll({
+                    where: {
+                        tenantId: req.tenantId,
+                        [Op.and]: db.sequelize.literal(MARGIN_CONDITIONS[margin]),
+                    },
+                    attributes: ["productId"],
+                    raw: true,
+                })
+            ).map((row) => row.productId);
+
+            idFilters.push({ [Op.in]: marginIds.length ? marginIds : [""] });
+        }
+
+        if (idFilters.length) {
+            where[Op.and] = [...(where[Op.and] || []), ...idFilters.map((condition) => ({ id: condition }))];
         }
 
         // =====================================================

@@ -2,7 +2,7 @@
 
 // POST /products/:id/remove    take a product off this store
 // POST /products/:id/restore   put a removed product back on sale
-// GET  /lookups                categories, brands, units for filters/forms
+// GET  /lookups                categories, brands, units, tax groups for filters/forms
 //
 // Removing keeps the product row (sales history points at it) but
 // hides it from checkout, product lists and inventory. It can also
@@ -17,7 +17,7 @@ import { PERMISSIONS } from "../../config/permissions.js";
 import { refreshStoreCount } from "../../services/catalog.js";
 import { handler, badRequest, notFound, HttpError } from "../../utils/http.js";
 
-const { product, inventory, category, brand, unit } = db;
+const { product, inventory, category, brand, unit, taxgroup } = db;
 
 const router = Router();
 
@@ -93,13 +93,14 @@ router.get(
         const where = { [Op.or]: [{ tenantId: null }, { tenantId: req.tenantId }] };
         const options = { where, attributes: ["id", "name"], order: [["name", "ASC"]] };
 
-        const [categories, brands, units] = await Promise.all([
+        const [categories, brands, units, taxGroups] = await Promise.all([
             category.findAll(options),
             brand.findAll(options),
             unit.findAll(options),
+            taxgroup.findAll({ ...options, attributes: ["id", "name", "rate"] }),
         ]);
 
-        return res.json({ successful: true, data: { categories, brands, units } });
+        return res.json({ successful: true, data: { categories, brands, units, taxGroups } });
     })
 );
 

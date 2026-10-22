@@ -60,6 +60,12 @@ export default async (req, res) => {
             reorderLevel,
             reorderQuantity,
             location,
+            batchNumber,
+            expiryDate,
+            supplierId,
+
+            // Optional second barcode (e.g. multipack / old packaging)
+            alternativeBarcode,
         } = req.body;
 
         const tenantId = req.tenantId;
@@ -200,10 +206,42 @@ export default async (req, res) => {
             });
         }
 
+        const cleanAltBarcode =
+            alternativeBarcode !== undefined &&
+            alternativeBarcode !== null &&
+            String(alternativeBarcode).trim() !== "" &&
+            String(alternativeBarcode).trim() !== cleanBarcode
+                ? String(alternativeBarcode).trim()
+                : null;
+
+        if (cleanAltBarcode) {
+            const existingAlt = await productbarcode.findOne({
+                where: { tenantId, barcode: cleanAltBarcode },
+                raw: true,
+            });
+
+            if (existingAlt) {
+                return res.status(403).json({
+                    successful: false,
+                    message: "Alternative barcode already belongs to another product",
+                });
+            }
+        }
+
+        if (supplierId) {
+            const supplierRow = await db.supplier.findOne({ where: { id: supplierId, tenantId } });
+
+            if (!supplierRow) {
+                return res.status(400).json({
+                    successful: false,
+                    message: "Supplier not found",
+                });
+            }
+        }
+
         // =====================================================
         // DUPLICATE BARCODE
         // =====================================================
-
         if (cleanBarcode) {
             const existingBarcode =
                 await productbarcode.findOne({
@@ -379,10 +417,25 @@ export default async (req, res) => {
                     );
                 }
 
+                if (cleanAltBarcode) {
+                    await productbarcode.create(
+                        {
+                            id: uuidv4(),
+                            tenantId,
+                            productId,
+                            barcode: cleanAltBarcode,
+                            barcodeType: barcodeType || "EAN-13",
+                            isPrimary: false,
+                            createdAt: date,
+                            updatedAt: date,
+                        },
+                        { transaction }
+                    );
+                }
+
                 // =================================================
                 // PRODUCT REGULATORY
                 // =================================================
-
                 await productregulatory.create(
                     {
                         id: uuidv4(),
@@ -436,6 +489,11 @@ export default async (req, res) => {
                         reorderLevel: Number(reorderLevel) || 0,
                         reorderQuantity: Number(reorderQuantity) || 0,
                         location: location || null,
+                        batchNumber: batchNumber || null,
+                        expiryDate:
+                            typeof expiryDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(expiryDate)
+                                ? expiryDate
+                                : null,
                     },
                     {
                         transaction,
@@ -456,6 +514,7 @@ export default async (req, res) => {
                                 ? costPrice
                                 : null,
                         note: "Opening stock",
+                        supplierId: supplierId || null,
                         transaction,
                     });
                 }

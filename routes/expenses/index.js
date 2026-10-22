@@ -137,6 +137,51 @@ router.put(
 // EXPENSES
 // =====================================================
 
+/**
+ * Category by id, or by name (`categoryName`). A name that doesn't
+ * exist yet becomes a new category - only for users who may manage
+ * categories (owner/manager); cashiers must pick an existing one.
+ */
+const resolveCategory = async (req, body) => {
+    if (body.categoryId) {
+        const category = await expenseCategory.findOne({ where: { id: body.categoryId, tenantId: req.tenantId } });
+
+        if (!category) {
+            throw badRequest("Choose a valid expense category");
+        }
+
+        return category;
+    }
+
+    const name = cleanString(body.categoryName);
+
+    if (!name) {
+        throw badRequest("Choose or type an expense category");
+    }
+
+    // Same name in any letter case is the same category.
+    const existing = await expenseCategory.findOne({
+        where: {
+            tenantId: req.tenantId,
+            [Op.and]: sequelize.where(sequelize.fn("LOWER", sequelize.col("name")), name.toLowerCase()),
+        },
+    });
+
+    if (existing) {
+        if (existing.status !== "active") {
+            await existing.update({ status: "active" });
+        }
+
+        return existing;
+    }
+
+    if (!has(req, PERMISSIONS.EXPENSES_MANAGE)) {
+        throw badRequest(`"${name}" is not an expense category. Ask a manager to add it.`);
+    }
+
+    return expenseCategory.create({ tenantId: req.tenantId, name });
+};
+
 /** Validated expense fields from the body. `partial` for updates. */
 const readExpense = async (req, partial = false) => {
     const body = req.body;
@@ -146,16 +191,8 @@ const readExpense = async (req, partial = false) => {
         data.amount = round2(requireNumber(body.amount, "Amount", { gt: 0 }));
     }
 
-    if (!partial || body.categoryId !== undefined) {
-        const category = await expenseCategory.findOne({
-            where: { id: body.categoryId || null, tenantId: req.tenantId },
-        });
-
-        if (!category) {
-            throw badRequest("Choose a valid expense category");
-        }
-
-        data.categoryId = category.id;
+    if (!partial || body.categoryId !== undefined || body.categoryName !== undefined) {
+        data.categoryId = (await resolveCategory(req, body)).id;
     }
 
     if (!partial || body.expenseDate !== undefined) {

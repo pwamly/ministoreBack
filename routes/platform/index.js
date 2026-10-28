@@ -13,7 +13,7 @@
 // PUT  /platform/catalog/:id          correct / verify a catalog item
 
 import { Router } from "express";
-import { Op } from "sequelize";
+import { Op, fn, col } from "sequelize";
 
 import db from "../../models/index.js";
 import { can } from "../../middleware/auth/authorize.js";
@@ -54,7 +54,15 @@ const formatTenant = (tenant) => ({
     email: tenant.email,
     phone: tenant.phone,
     status: tenant.status,
-    plan: tenant.plan ? { id: tenant.plan.id, code: tenant.plan.code, name: tenant.plan.name } : null,
+    plan: tenant.plan
+        ? {
+              id: tenant.plan.id,
+              code: tenant.plan.code,
+              name: tenant.plan.name,
+              maxUsers: tenant.plan.maxUsers,
+              maxProducts: tenant.plan.maxProducts,
+          }
+        : null,
     subscriptionStatus: tenant.subscriptionStatus,
     trialEndsAt: tenant.trialEndsAt,
     subscriptionEndsAt: tenant.subscriptionEndsAt,
@@ -127,7 +135,33 @@ router.get(
             order: [["createdAt", "DESC"]],
         });
 
-        return res.json({ successful: true, data: tenants.map(formatTenant) });
+        // Counted the same way the plan limits are enforced.
+        const tenantIds = tenants.map((tenant) => tenant.id);
+        const countBy = async (model, extraWhere) => {
+            const rows = tenantIds.length
+                ? await model.findAll({
+                      where: { tenantId: tenantIds, ...extraWhere },
+                      attributes: ["tenantId", [fn("COUNT", col("id")), "count"]],
+                      group: ["tenantId"],
+                      raw: true,
+                  })
+                : [];
+
+            return Object.fromEntries(rows.map((row) => [row.tenantId, Number(row.count)]));
+        };
+
+        const [users, products] = await Promise.all([
+            countBy(min_user, { status: "active" }),
+            countBy(db.product, { status: { [Op.ne]: "removed" } }),
+        ]);
+
+        return res.json({
+            successful: true,
+            data: tenants.map((tenant) => ({
+                ...formatTenant(tenant),
+                usage: { users: users[tenant.id] || 0, products: products[tenant.id] || 0 },
+            })),
+        });
     })
 );
 

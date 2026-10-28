@@ -28,6 +28,7 @@ import expenses from "./expenses/index.js";
 import users from "./users/index.js";
 import tenant from "./tenant/index.js";
 import platform from "./platform/index.js";
+import platformPayments from "./platform/payments.js";
 import billing from "./billing/index.js";
 
 const api = Router();
@@ -39,6 +40,7 @@ api.get("/me", (req, res) =>
 
 // SaaS operator - not inside any store.
 api.use(platform);
+api.use(platformPayments);
 
 // Everything below is store data.
 api.use(requireTenant);

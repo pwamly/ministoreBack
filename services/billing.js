@@ -3,6 +3,8 @@
 // Stores paying for their own subscription.
 //
 //   startCheckout   creates a pending payment and sends the prompt to the phone
+//   submitManualPayment / approveManualPayment / rejectManualPayment
+//                   paid by hand, screenshot checked by a platform admin
 //   confirmPayment  asks the provider for the result and, once paid, extends
 //                   the tenant's subscription. Safe to call any number of times
 //                   (webhook, polling, retries).
@@ -14,8 +16,10 @@ import crypto from "crypto";
 import { Op } from "sequelize";
 import { v4 as uuidv4 } from "uuid";
 
+import config from "../config/index.js";
 import db from "../models/index.js";
 import { defaultProvider, getProvider } from "./payments/index.js";
+import { decodeProof, saveProof } from "./paymentProofs.js";
 import { HttpError, badRequest, notFound } from "../utils/http.js";
 
 const { subscriptionPayment: Payment, tenant: Tenant, plan: Plan, min_user, product } = db;
@@ -61,6 +65,9 @@ const periodStartFor = (tenant, now) => {
 export const formatPayment = (payment) => ({
     id: payment.id,
     reference: payment.orderReference,
+    provider: payment.provider,
+    // What the payer typed from their SMS / bank slip (manual payments).
+    transactionId: payment.provider === "manual" ? payment.providerPaymentId : null,
     plan: payment.plan ? { code: payment.plan.code, name: payment.plan.name } : undefined,
     periods: payment.periods,
     amount: Number(payment.amount),
@@ -90,23 +97,8 @@ const assertPlanFits = async (tenant, plan) => {
     }
 };
 
-/**
- * @param {object} args
- * @param {object} args.tenant   req.tenant (with plan)
- * @param {object} args.user     paying user
- * @param {string} [args.planCode]  defaults to the tenant's current plan
- * @param {number} [args.periods]   billing cycles to buy, 1..MAX_PERIODS
- * @param {string} args.phone
- */
-export const startCheckout = async ({ tenant, user, planCode, periods = 1, phone }) => {
-    const provider = defaultProvider;
-
-    if (!provider.isConfigured()) {
-        throw new HttpError(503, "Online payments are not available yet. Contact support.", {
-            code: "PAYMENTS_DISABLED",
-        });
-    }
-
+/** Checks a plan/periods choice for this tenant. */
+const resolvePlan = async ({ tenant, planCode, periods = 1 }) => {
     if (["active", "past_due"].includes(tenant.subscriptionStatus) && !tenant.subscriptionEndsAt) {
         throw badRequest("Your subscription has no end date, so there is nothing to pay.");
     }
@@ -136,6 +128,28 @@ export const startCheckout = async ({ tenant, user, planCode, periods = 1, phone
     if (plan.id !== tenant.planId) {
         await assertPlanFits(tenant, plan);
     }
+
+    return { plan, count };
+};
+
+/**
+ * @param {object} args
+ * @param {object} args.tenant   req.tenant (with plan)
+ * @param {object} args.user     paying user
+ * @param {string} [args.planCode]  defaults to the tenant's current plan
+ * @param {number} [args.periods]   billing cycles to buy, 1..MAX_PERIODS
+ * @param {string} args.phone
+ */
+export const startCheckout = async ({ tenant, user, planCode, periods = 1, phone }) => {
+    const provider = defaultProvider;
+
+    if (!provider.isConfigured()) {
+        throw new HttpError(503, "Online payments are not available yet. Contact support.", {
+            code: "PAYMENTS_DISABLED",
+        });
+    }
+
+    const { plan, count } = await resolvePlan({ tenant, planCode, periods });
 
     const payment = await Payment.create({
         id: uuidv4(),
@@ -169,6 +183,40 @@ export const startCheckout = async ({ tenant, user, planCode, periods = 1, phone
 
     return payment;
 };
+
+/**
+ * Marks a pending payment paid and extends the tenant's subscription
+ * by its plan and periods. Locks both rows; a payment that is no
+ * longer pending is returned untouched (already applied elsewhere).
+ */
+const activatePayment = (paymentId, changes = {}) =>
+    db.sequelize.transaction(async (transaction) => {
+        const locked = await Payment.findByPk(paymentId, { transaction, lock: transaction.LOCK.UPDATE });
+
+        if (locked.status !== "pending") {
+            return locked;
+        }
+
+        const tenant = await Tenant.findByPk(locked.tenantId, { transaction, lock: transaction.LOCK.UPDATE });
+        const plan = await Plan.findByPk(locked.planId, { transaction });
+
+        const now = new Date();
+        const periodStart = periodStartFor(tenant, now);
+        const periodEnd = addMonths(periodStart, CYCLE_MONTHS[plan.billingCycle] * locked.periods);
+
+        await tenant.update(
+            {
+                planId: plan.id,
+                subscriptionStatus: "active",
+                subscriptionEndsAt: periodEnd,
+            },
+            { transaction }
+        );
+
+        await locked.update({ status: "paid", paidAt: now, periodStart, periodEnd, message: null, ...changes }, { transaction });
+
+        return locked;
+    });
 
 /**
  * Brings a payment up to date with the provider and applies it.
@@ -211,43 +259,123 @@ export const confirmPayment = async (orderReference) => {
         return payment;
     }
 
-    return db.sequelize.transaction(async (transaction) => {
-        const locked = await Payment.findByPk(payment.id, { transaction, lock: transaction.LOCK.UPDATE });
-
-        // Another request applied it first.
-        if (locked.status !== "pending") {
-            return locked;
-        }
-
-        const tenant = await Tenant.findByPk(locked.tenantId, { transaction, lock: transaction.LOCK.UPDATE });
-        const plan = await Plan.findByPk(locked.planId, { transaction });
-
-        const now = new Date();
-        const periodStart = periodStartFor(tenant, now);
-        const periodEnd = addMonths(periodStart, CYCLE_MONTHS[plan.billingCycle] * locked.periods);
-
-        await tenant.update(
-            {
-                planId: plan.id,
-                subscriptionStatus: "active",
-                subscriptionEndsAt: periodEnd,
-            },
-            { transaction }
-        );
-
-        await locked.update(
-            {
-                status: "paid",
-                paidAt: now,
-                periodStart,
-                periodEnd,
-                providerPaymentId: remote.providerPaymentId || locked.providerPaymentId,
-                channel: remote.channel || locked.channel,
-                message: null,
-            },
-            { transaction }
-        );
-
-        return locked;
+    return activatePayment(payment.id, {
+        providerPaymentId: remote.providerPaymentId || payment.providerPaymentId,
+        channel: remote.channel || payment.channel,
     });
+};
+
+// =====================================================
+// MANUAL PAYMENTS (mobile money / bank transfer + screenshot)
+// =====================================================
+
+const MAX_PENDING_MANUAL = 3;
+
+export const manualPaymentSettings = () => {
+    const { enabled, accounts, accountName } = config.payments.manual;
+
+    return { enabled: enabled && accounts.length > 0, accounts, accountName: accountName || null };
+};
+
+/**
+ * Owner says they paid: records a pending payment with the screenshot.
+ * Nothing changes on the subscription until a platform admin approves it.
+ */
+export const submitManualPayment = async ({ tenant, user, planCode, periods, accountId, transactionId, phone, screenshot }) => {
+    const settings = manualPaymentSettings();
+
+    if (!settings.enabled) {
+        throw new HttpError(503, "Manual payments are not available. Contact support.", { code: "PAYMENTS_DISABLED" });
+    }
+
+    const account = settings.accounts.find((item) => item.id === accountId);
+
+    if (!account) {
+        throw badRequest("Choose the account you paid to");
+    }
+
+    const reference = String(transactionId || "").trim().toUpperCase();
+
+    if (reference.length < 4 || reference.length > 100) {
+        throw badRequest("Enter the transaction ID from the payment message");
+    }
+
+    const { plan, count } = await resolvePlan({ tenant, planCode, periods });
+    const proof = decodeProof(screenshot);
+
+    const duplicate = await Payment.findOne({
+        where: { provider: "manual", providerPaymentId: reference, status: { [Op.in]: ["pending", "paid"] } },
+    });
+
+    if (duplicate) {
+        throw new HttpError(409, "This transaction ID has already been submitted");
+    }
+
+    const pending = await Payment.count({ where: { tenantId: tenant.id, provider: "manual", status: "pending" } });
+
+    if (pending >= MAX_PENDING_MANUAL) {
+        throw badRequest("You already have payments waiting for verification. Please wait for them to be checked.");
+    }
+
+    const payment = await Payment.create({
+        id: uuidv4(),
+        tenantId: tenant.id,
+        planId: plan.id,
+        periods: count,
+        amount: Number(plan.price) * count,
+        currency: plan.currency,
+        provider: "manual",
+        orderReference: newOrderReference(),
+        providerPaymentId: reference,
+        channel: account.label.slice(0, 50),
+        phone: String(phone || "").trim() ? normalizePhone(phone) : null,
+        status: "pending",
+        message: "Waiting for verification",
+        createdBy: user.id,
+    });
+
+    try {
+        await saveProof(payment.id, proof);
+    } catch (error) {
+        await payment.destroy();
+        throw error;
+    }
+
+    payment.plan = plan;
+
+    return payment;
+};
+
+const findManual = async (paymentId) => {
+    const payment = await Payment.findOne({ where: { id: paymentId, provider: "manual" } });
+
+    if (!payment) {
+        throw notFound("Payment not found");
+    }
+
+    if (payment.status !== "pending") {
+        throw badRequest(`This payment is already ${payment.status}`);
+    }
+
+    return payment;
+};
+
+/** Platform admin checked the money arrived: extend the subscription. */
+export const approveManualPayment = async (paymentId) => {
+    const payment = await findManual(paymentId);
+
+    return activatePayment(payment.id);
+};
+
+export const rejectManualPayment = async (paymentId, reason) => {
+    const payment = await findManual(paymentId);
+    const message = String(reason || "").trim();
+
+    if (!message) {
+        throw badRequest("Give a reason so the store knows what to fix");
+    }
+
+    await payment.update({ status: "rejected", message: message.slice(0, 255) });
+
+    return payment;
 };

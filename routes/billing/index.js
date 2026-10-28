@@ -3,6 +3,8 @@
 // GET  /billing                      plans to choose from, current subscription, recent payments
 // POST /billing/checkout             { planCode?, periods?, phone } -> sends the payment prompt
 // GET  /billing/payments/:reference  payment status (poll after checkout)
+// POST /billing/manual-payments      { planCode?, periods?, accountId, transactionId, phone?, screenshot }
+//                                    paid by hand; a platform admin verifies the screenshot
 //
 // Reachable while the subscription is expired (see isAuth), so the
 // owner can pay to get the store back.
@@ -13,7 +15,14 @@ import db from "../../models/index.js";
 import { can } from "../../middleware/auth/authorize.js";
 import { PERMISSIONS } from "../../config/permissions.js";
 import { subscriptionState } from "../../services/subscription.js";
-import { MAX_PERIODS, confirmPayment, formatPayment, startCheckout } from "../../services/billing.js";
+import {
+    MAX_PERIODS,
+    confirmPayment,
+    formatPayment,
+    manualPaymentSettings,
+    startCheckout,
+    submitManualPayment,
+} from "../../services/billing.js";
 import { defaultProvider } from "../../services/payments/index.js";
 import { handler, notFound } from "../../utils/http.js";
 
@@ -43,6 +52,7 @@ router.get(
             successful: true,
             data: {
                 paymentsEnabled: defaultProvider.isConfigured(),
+                manualPayment: manualPaymentSettings(),
                 maxPeriods: MAX_PERIODS,
                 subscription: {
                     status: tenant.subscriptionStatus,
@@ -78,6 +88,30 @@ router.post(
         return res.status(201).json({
             successful: true,
             message: "Check your phone and enter your PIN to confirm the payment.",
+            data: formatPayment(payment),
+        });
+    })
+);
+
+router.post(
+    "/billing/manual-payments",
+    handler(async (req, res) => {
+        const { planCode, periods, accountId, transactionId, phone, screenshot } = req.body;
+
+        const payment = await submitManualPayment({
+            tenant: req.tenant,
+            user: req.user,
+            planCode,
+            periods,
+            accountId,
+            transactionId,
+            phone,
+            screenshot,
+        });
+
+        return res.status(201).json({
+            successful: true,
+            message: "Payment submitted. Your subscription will be extended once we verify it.",
             data: formatPayment(payment),
         });
     })

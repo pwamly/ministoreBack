@@ -22,7 +22,7 @@ export default (sequelize, DataTypes) => {
             providerPaymentId: { type: DataTypes.STRING(100), allowNull: true },
             channel: { type: DataTypes.STRING(50), allowNull: true },
             phone: { type: DataTypes.STRING(20), allowNull: true },
-            // pending | paid | failed | review (paid the wrong amount)
+            // pending | paid | failed | review (paid the wrong amount) | rejected (manual proof refused)
             status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: "pending" },
             message: { type: DataTypes.STRING(255), allowNull: true },
             periodStart: { type: DataTypes.DATE, allowNull: true },

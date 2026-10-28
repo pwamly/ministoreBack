@@ -6,3 +6,4 @@ package.json
 config/config.json
 cert/
 dist/
+uploads/

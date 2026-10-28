@@ -17,6 +17,13 @@ const { APP_ENV, isDev, isProd, str, int, bool, list, required } = env;
 const secret = (key) =>
     isDev ? str(key, `dev-only-${key.toLowerCase()}`) : required(key);
 
+const parseAccounts = (value) =>
+    String(value || "")
+        .split(";")
+        .map((entry) => entry.split("|").map((part) => part.trim()))
+        .filter(([id, label, number]) => id && label && number)
+        .map(([id, label, number]) => ({ id, label, number }));
+
 const config = {
     appEnv: APP_ENV,
     isDev,
@@ -79,7 +86,25 @@ const config = {
             // Only needed when checksum is enabled on the ClickPesa account.
             checksumKey: str("CLICKPESA_CHECKSUM_KEY", undefined),
         },
+
+        // Pay by hand to one of these accounts, upload the screenshot,
+        // a platform admin approves it (routes/platform/payments.js).
+        manual: {
+            enabled: bool("MANUAL_PAYMENTS_ENABLED", true),
+            // "id|label|number;..." shown on the billing page.
+            accounts: parseAccounts(
+                str(
+                    "MANUAL_PAYMENT_ACCOUNTS",
+                    "tigo|Mixx by Yas (Tigo Pesa)|+255673089337;airtel|Airtel Money|+255685601693;crdb|CRDB Bank|0152880131900"
+                )
+            ),
+            // Registered name on the accounts, so payers can check it.
+            accountName: str("MANUAL_PAYMENT_ACCOUNT_NAME", undefined),
+        },
     },
+
+    // Payment screenshots are kept under here (not in git, back it up).
+    uploadsDir: str("UPLOADS_DIR", "uploads"),
 
     db: database[APP_ENV],
 };

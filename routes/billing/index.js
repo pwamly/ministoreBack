@@ -3,7 +3,7 @@
 // GET  /billing                      plans to choose from, current subscription, recent payments
 // POST /billing/checkout             { planCode?, periods?, phone } -> sends the payment prompt
 // GET  /billing/payments/:reference  payment status (poll after checkout)
-// POST /billing/manual-payments      { planCode?, periods?, accountId, transactionId, phone?, screenshot }
+// POST /billing/manual-payments      { planCode?, periods?, accountId, phone (paid from), transactionId?, screenshot }
 //                                    paid by hand; a platform admin verifies the screenshot
 //
 // Reachable while the subscription is expired (see isAuth), so the

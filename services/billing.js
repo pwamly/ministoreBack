@@ -277,6 +277,27 @@ export const manualPaymentSettings = () => {
     return { enabled: enabled && accounts.length > 0, accounts, accountName: accountName || null };
 };
 
+/** Mobile number (-> 2557XXXXXXXX) or bank account number the money came from. */
+const normalizePayer = (value) => {
+    const text = String(value || "").trim();
+
+    if (!text) {
+        throw badRequest("Enter the mobile number or bank account you paid from");
+    }
+
+    try {
+        return normalizePhone(text);
+    } catch {
+        const account = text.replace(/[\s-]/g, "").toUpperCase();
+
+        if (!/^[0-9A-Z]{6,20}$/.test(account)) {
+            throw badRequest("Enter a valid mobile number (e.g. 0712345678) or bank account number");
+        }
+
+        return account;
+    }
+};
+
 /**
  * Owner says they paid: records a pending payment with the screenshot.
  * Nothing changes on the subscription until a platform admin approves it.
@@ -294,18 +315,22 @@ export const submitManualPayment = async ({ tenant, user, planCode, periods, acc
         throw badRequest("Choose the account you paid to");
     }
 
-    const reference = String(transactionId || "").trim().toUpperCase();
+    const reference = String(transactionId || "").trim().toUpperCase() || null;
 
-    if (reference.length < 4 || reference.length > 100) {
-        throw badRequest("Enter the transaction ID from the payment message");
+    if (reference && reference.length > 100) {
+        throw badRequest("The transaction ID is too long");
     }
+
+    const paidFrom = normalizePayer(phone);
 
     const { plan, count } = await resolvePlan({ tenant, planCode, periods });
     const proof = decodeProof(screenshot);
 
-    const duplicate = await Payment.findOne({
-        where: { provider: "manual", providerPaymentId: reference, status: { [Op.in]: ["pending", "paid"] } },
-    });
+    const duplicate =
+        reference &&
+        (await Payment.findOne({
+            where: { provider: "manual", providerPaymentId: reference, status: { [Op.in]: ["pending", "paid"] } },
+        }));
 
     if (duplicate) {
         throw new HttpError(409, "This transaction ID has already been submitted");
@@ -328,7 +353,7 @@ export const submitManualPayment = async ({ tenant, user, planCode, periods, acc
         orderReference: newOrderReference(),
         providerPaymentId: reference,
         channel: account.label.slice(0, 50),
-        phone: String(phone || "").trim() ? normalizePhone(phone) : null,
+        phone: paidFrom,
         status: "pending",
         message: "Waiting for verification",
         createdBy: user.id,

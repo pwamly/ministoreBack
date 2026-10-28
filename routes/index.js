@@ -16,6 +16,7 @@ import editProduct from "./products/editProduct.js";
 import unregisteredItems from "./products/unregisteredItems.js";
 import catalog from "./products/catalog.js";
 import productActions from "./products/productActions.js";
+import importProducts from "./products/importProducts.js";
 import dashboard from "./reports/dashboard.js";
 import notifications from "./reports/notifications.js";
 import regSales from "./sales/regSales.js";
@@ -27,6 +28,7 @@ import expenses from "./expenses/index.js";
 import users from "./users/index.js";
 import tenant from "./tenant/index.js";
 import platform from "./platform/index.js";
+import billing from "./billing/index.js";
 
 const api = Router();
 
@@ -55,6 +57,7 @@ api.get("/get-sales", can(P.SALES_VIEW), sales);
 api.use(unregisteredItems);
 api.use(catalog);
 api.use(productActions);
+api.use(importProducts);
 api.use(dashboard);
 api.use(notifications);
 api.use(loans);
@@ -63,5 +66,6 @@ api.use(suppliers);
 api.use(expenses);
 api.use(users);
 api.use(tenant);
+api.use(billing);
 
 export default api;

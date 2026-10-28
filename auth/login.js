@@ -42,10 +42,16 @@ export default async (req, res) => {
               })
             : null;
 
+        let billingRequired = null;
+
         if (user.userRole !== ROLES.SUPER_ADMIN) {
             const state = subscriptionState(tenant);
 
-            if (!state.ok) {
+            // The owner of an unpaid store signs in to pay; the API
+            // only lets them reach /api/billing until they do.
+            if (!state.ok && state.renewable && user.userRole === ROLES.OWNER) {
+                billingRequired = { code: "SUBSCRIPTION_INACTIVE", message: state.reason };
+            } else if (!state.ok) {
                 return res.status(402).json({
                     successful: false,
                     success: false,
@@ -63,6 +69,7 @@ export default async (req, res) => {
             message: "Login successful",
             accessToken: createAccessToken(user),
             profile: sessionProfile(user, tenant),
+            billingRequired,
         });
     } catch (error) {
         console.error("LOGIN ERROR:", error);

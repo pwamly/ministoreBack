@@ -7,7 +7,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /**
  * Can this tenant use the system right now?
  *
- * @returns {{ ok: boolean, reason?: string, expiresAt?: Date|null }}
+ * renewable = blocked only for not paying, so the owner may still
+ * sign in and pay (see routes/billing).
+ *
+ * @returns {{ ok: boolean, reason?: string, renewable?: boolean, expiresAt?: Date|null }}
  */
 export const subscriptionState = (tenant, now = new Date()) => {
     if (!tenant) {
@@ -25,7 +28,7 @@ export const subscriptionState = (tenant, now = new Date()) => {
             const endsAt = tenant.trialEndsAt ? new Date(tenant.trialEndsAt) : null;
 
             if (endsAt && endsAt.getTime() + graceMs < now.getTime()) {
-                return { ok: false, reason: "Your free trial has ended. Please subscribe to continue." };
+                return { ok: false, reason: "Your free trial has ended. Please subscribe to continue.", renewable: true };
             }
 
             return { ok: true, expiresAt: endsAt };
@@ -36,13 +39,13 @@ export const subscriptionState = (tenant, now = new Date()) => {
             const endsAt = tenant.subscriptionEndsAt ? new Date(tenant.subscriptionEndsAt) : null;
 
             if (endsAt && endsAt.getTime() + graceMs < now.getTime()) {
-                return { ok: false, reason: "Your subscription has expired. Please renew to continue." };
+                return { ok: false, reason: "Your subscription has expired. Please renew to continue.", renewable: true };
             }
 
             return { ok: true, expiresAt: endsAt };
         }
 
         default:
-            return { ok: false, reason: "Your subscription is not active. Please subscribe to continue." };
+            return { ok: false, reason: "Your subscription is not active. Please subscribe to continue.", renewable: true };
     }
 };

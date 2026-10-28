@@ -69,6 +69,18 @@ const config = {
         defaultCurrency: str("DEFAULT_CURRENCY", "TZS"),
     },
 
+    // Subscription payments (services/payments). Billing endpoints
+    // answer 503 until the provider credentials are set.
+    payments: {
+        clickpesa: {
+            baseUrl: str("CLICKPESA_BASE_URL", "https://api.clickpesa.com/third-parties"),
+            clientId: str("CLICKPESA_CLIENT_ID", undefined),
+            apiKey: str("CLICKPESA_API_KEY", undefined),
+            // Only needed when checksum is enabled on the ClickPesa account.
+            checksumKey: str("CLICKPESA_CHECKSUM_KEY", undefined),
+        },
+    },
+
     db: database[APP_ENV],
 };
 

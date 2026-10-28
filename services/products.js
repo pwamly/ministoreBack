@@ -6,7 +6,7 @@ import { Op } from "sequelize";
 import db from "../models/index.js";
 import { applyStockChange } from "./stock.js";
 import { STOCK_MOVEMENT_TYPES } from "../models/stockMovement.js";
-import { HttpError, badRequest, conflict, cleanString } from "../utils/http.js";
+import { HttpError, badRequest, conflict, cleanString, isDateString } from "../utils/http.js";
 import { DETAIL_FIELDS, REGULATORY_FIELDS, linkProductToCatalog, refreshStoreCount } from "./catalog.js";
 
 /**
@@ -16,6 +16,8 @@ import { DETAIL_FIELDS, REGULATORY_FIELDS, linkProductToCatalog, refreshStoreCou
  *
  * data: { sku, itemName, sellingPrice, costPrice?, minimumSellingPrice?,
  *         barcode?, openingStock?, reorderLevel?,
+ *         batchNumber?, expiryDate? (YYYY-MM-DD), supplierId?,
+ *         status? ("active" | "inactive"),
  *         description?, productType?, brandId?, categoryId?, unitId?,
  *         flavor?, size?, netWeight?, weightUnit?, packagingType?,
  *         manufacturer?, countryOfOrigin?,
@@ -41,6 +43,16 @@ export const createProduct = async ({ tenant, userId, data, transaction }) => {
 
     if (!(costPrice >= 0) || openingStock < 0) {
         throw badRequest("Cost price and opening stock must be 0 or more");
+    }
+
+    const status = data.status || "active";
+
+    if (!["active", "inactive"].includes(status)) {
+        throw badRequest("Status must be active or inactive");
+    }
+
+    if (data.supplierId && !(await db.supplier.findOne({ where: { id: data.supplierId, tenantId }, transaction }))) {
+        throw badRequest("Supplier not found");
     }
 
     const maxProducts = tenant.plan?.maxProducts;
@@ -73,7 +85,7 @@ export const createProduct = async ({ tenant, userId, data, transaction }) => {
             brandId: data.brandId || null,
             categoryId: data.categoryId || null,
             unitId: data.unitId || null,
-            status: "active",
+            status,
         },
         { transaction }
     );
@@ -109,7 +121,14 @@ export const createProduct = async ({ tenant, userId, data, transaction }) => {
     );
 
     await db.inventory.create(
-        { tenantId, productId, quantity: 0, reorderLevel: Number(data.reorderLevel) || 0 },
+        {
+            tenantId,
+            productId,
+            quantity: 0,
+            reorderLevel: Number(data.reorderLevel) || 0,
+            batchNumber: cleanString(data.batchNumber),
+            expiryDate: isDateString(data.expiryDate) ? data.expiryDate : null,
+        },
         { transaction }
     );
 
@@ -122,6 +141,7 @@ export const createProduct = async ({ tenant, userId, data, transaction }) => {
             userId,
             unitCost: costPrice,
             note: "Opening stock",
+            supplierId: data.supplierId || null,
             transaction,
         });
     }

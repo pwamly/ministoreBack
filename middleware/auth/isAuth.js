@@ -10,6 +10,9 @@ import { subscriptionState } from "../../services/subscription.js";
 
 const { verify } = jwt;
 
+// Paths (relative to /api) an expired but not suspended store can use.
+const UNPAID_ALLOWED = /^\/(me|billing)(\/|$)/;
+
 const deny = (res, status, message) => {
     res.statusMessage = message;
 
@@ -28,7 +31,8 @@ const deny = (res, status, message) => {
  *
  * 403 = token invalid/expired (frontend refreshes and retries)
  * 401 = session revoked or user disabled (frontend logs out)
- * 402 = store suspended or subscription expired
+ * 402 = store suspended or subscription expired (billing routes
+ *       stay open while only payment is missing)
  */
 export default async (req, res, next) => {
     const header = req.headers.authorization;
@@ -73,11 +77,14 @@ export default async (req, res, next) => {
         if (!isSuperAdmin) {
             const state = subscriptionState(tenant);
 
-            if (!state.ok) {
+            // An unpaid store can still reach billing to pay.
+            if (!state.ok && !(state.renewable && UNPAID_ALLOWED.test(req.path))) {
                 return res.status(402).json({
                     successful: false,
                     code: "SUBSCRIPTION_INACTIVE",
                     message: state.reason,
+                    // true: paying fixes it (frontend sends owners to billing)
+                    renewable: Boolean(state.renewable),
                 });
             }
         }

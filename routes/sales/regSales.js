@@ -1056,8 +1056,11 @@ export default async (req, res) => {
                                 delta: -Number(item.quantity),
                                 type: STOCK_MOVEMENT_TYPES.SALE,
                                 userId,
-                                allowNegative:
-                                    Boolean(req.tenant?.allowNegativeStock),
+                                // A sale is never blocked by stock: if the
+                                // item is physically on the counter, the
+                                // records are what's wrong. Stock goes
+                                // negative and shows up for a stocktake.
+                                allowNegative: true,
                                 productName: item.productName,
                                 unitCost: item.costPrice,
                                 referenceType: "sale",

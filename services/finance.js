@@ -413,7 +413,18 @@ export const moneyHistory = async ({ tenantId, from, to, type, limit, offset }) 
     }
 
     const selected = type ? [type] : HISTORY_TYPES;
-    const union = selected.map((key) => parts[key]).join(" UNION ALL ");
+
+    // Tables created at different times can have different collations
+    // (e.g. older tables utf8mb4_general_ci, newer ones utf8mb4_0900_ai_ci),
+    // and UNION refuses to combine text columns that disagree. Each part's
+    // text columns are converted to one collation before the UNION.
+    const text = (column) => `CONVERT(${column} USING utf8mb4) COLLATE utf8mb4_unicode_ci AS ${column}`;
+    const normalised = (sql) =>
+        `SELECT ${["id", "type", "direction"].map(text).join(", ")}, amount, ${["method", "occurredAt", "reference", "description"]
+            .map(text)
+            .join(", ")}, profit, credit FROM (${sql}) part`;
+
+    const union = selected.map((key) => normalised(parts[key])).join(" UNION ALL ");
 
     const [rows, [{ total }]] = await Promise.all([
         query(`SELECT * FROM (${union}) money ORDER BY occurredAt DESC, id LIMIT :limit OFFSET :skip`, params),

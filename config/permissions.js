@@ -46,6 +46,7 @@ export const PERMISSIONS = {
 
     USERS_MANAGE: "users.manage",
     SETTINGS_MANAGE: "settings.manage",
+    FINANCE_VIEW: "finance.view", // money summary: cash position, profit, history
 
     PLATFORM_MANAGE: "platform.manage",
 };
@@ -76,7 +77,7 @@ const MANAGER_PERMISSIONS = [
 export const ROLE_PERMISSIONS = {
     [ROLES.SUPER_ADMIN]: [P.PLATFORM_MANAGE],
 
-    [ROLES.OWNER]: [...MANAGER_PERMISSIONS, P.USERS_MANAGE, P.SETTINGS_MANAGE],
+    [ROLES.OWNER]: [...MANAGER_PERMISSIONS, P.USERS_MANAGE, P.SETTINGS_MANAGE, P.FINANCE_VIEW],
 
     [ROLES.MANAGER]: MANAGER_PERMISSIONS,
 

@@ -29,6 +29,7 @@ const formatTenant = async (tenant) => {
         address: tenant.address,
         currency: tenant.currency,
         allowNegativeStock: tenant.allowNegativeStock,
+        financialYearStartMonth: tenant.financialYearStartMonth,
         subscription: {
             status: tenant.subscriptionStatus,
             trialEndsAt: tenant.trialEndsAt,
@@ -76,6 +77,16 @@ router.put(
 
         if (changes.currency === null) {
             throw badRequest("Currency cannot be empty");
+        }
+
+        if (req.body.financialYearStartMonth !== undefined) {
+            const month = Number(req.body.financialYearStartMonth);
+
+            if (!Number.isInteger(month) || month < 1 || month > 12) {
+                throw badRequest("Financial year start month must be 1 to 12");
+            }
+
+            changes.financialYearStartMonth = month;
         }
 
         if (req.body.allowNegativeStock !== undefined) {

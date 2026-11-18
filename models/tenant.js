@@ -75,6 +75,13 @@ export default (sequelize, DataTypes) => {
                 allowNull: true,
             },
 
+            // 1-12: month the financial year starts (yearly reports)
+            financialYearStartMonth: {
+                type: DataTypes.TINYINT,
+                allowNull: false,
+                defaultValue: 1,
+            },
+
             allowNegativeStock: {
                 type: DataTypes.BOOLEAN,
                 allowNull: false,

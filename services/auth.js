@@ -84,6 +84,7 @@ export const sessionProfile = (user, tenant) => {
                   name: tenant.name,
                   currency: tenant.currency,
                   allowNegativeStock: tenant.allowNegativeStock,
+                  financialYearStartMonth: tenant.financialYearStartMonth,
                   plan: tenant.plan
                       ? {
                             code: tenant.plan.code,

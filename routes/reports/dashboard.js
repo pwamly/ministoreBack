@@ -161,15 +161,54 @@ router.get(
               )
             : [];
 
+        // Money spent on stock: completed supplier orders, by the day
+        // they were completed (goods received and paid).
+        const showPurchases = has(req, PERMISSIONS.ORDERS_VIEW);
+
+        const monthlyPurchases = showPurchases
+            ? await query(
+                  `SELECT DATE_FORMAT(DATE_ADD(completedAt, INTERVAL :offset MINUTE), '%Y-%m') AS month, SUM(totalAmount) AS purchases
+                     FROM purchaseOrders
+                    WHERE tenantId = :tenantId AND status = 'completed' AND completedAt >= :sixMonthsStart
+                    GROUP BY month`,
+                  { ...base, sixMonthsStart }
+              )
+            : [];
+
         const salesByMonth = Object.fromEntries(monthlySales.map((row) => [row.month, row]));
         const expensesByMonth = Object.fromEntries(monthlyExpenses.map((row) => [row.month, row]));
+        const purchasesByMonth = Object.fromEntries(monthlyPurchases.map((row) => [row.month, row]));
 
         const monthly = monthKeys.map((month) => ({
             month,
             revenue: round2(salesByMonth[month]?.revenue || 0),
             ...(showProfit ? { profit: round2(salesByMonth[month]?.profit || 0) } : {}),
             ...(showExpenses ? { expenses: round2(expensesByMonth[month]?.expenses || 0) } : {}),
+            ...(showPurchases ? { purchases: round2(purchasesByMonth[month]?.purchases || 0) } : {}),
         }));
+
+        // ---------------- purchases (supplier orders) ----------------
+
+        let purchases = null;
+
+        if (showPurchases) {
+            const [row] = await query(
+                `SELECT
+                    COALESCE(SUM(CASE WHEN status = 'completed' AND completedAt >= :periodStart THEN totalAmount ELSE 0 END), 0) AS total,
+                    COALESCE(SUM(CASE WHEN status = 'completed' AND completedAt >= :periodStart THEN 1 ELSE 0 END), 0) AS orders,
+                    COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) AS pendingCount,
+                    COALESCE(SUM(CASE WHEN status = 'pending' THEN totalAmount ELSE 0 END), 0) AS pendingAmount
+                   FROM purchaseOrders WHERE tenantId = :tenantId`,
+                base
+            );
+
+            purchases = {
+                total: round2(row.total),
+                orders: Number(row.orders),
+                pendingCount: Number(row.pendingCount),
+                pendingAmount: round2(row.pendingAmount),
+            };
+        }
 
         // ---------------- expenses in the period ----------------
 
@@ -242,6 +281,12 @@ router.get(
             periodSummary.netProfit = round2(periodSummary.profit - expenses.total);
         }
 
+        // Money in minus money out. Stock purchases are not in net
+        // profit (their cost is already counted when the items sell).
+        if (purchases) {
+            periodSummary.cashFlow = round2(periodSummary.revenue - purchases.total - (expenses?.total || 0));
+        }
+
         return res.json({
             successful: true,
             data: {
@@ -255,6 +300,7 @@ router.get(
                 expenses,
                 loans,
                 stock,
+                purchases,
             },
         });
     })

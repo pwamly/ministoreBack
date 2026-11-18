@@ -31,6 +31,11 @@ export const PERMISSIONS = {
     INVENTORY_VIEW: "inventory.view",
     INVENTORY_MANAGE: "inventory.manage",
 
+    // Purchase orders to suppliers
+    ORDERS_VIEW: "orders.view",
+    ORDERS_CREATE: "orders.create", // create + edit pending orders
+    ORDERS_COMPLETE: "orders.complete", // receive (adds stock, records the purchase) or cancel
+
     EXPENSES_VIEW: "expenses.view", // without view_all: only own expenses
     EXPENSES_VIEW_ALL: "expenses.view_all",
     EXPENSES_CREATE: "expenses.create",
@@ -57,6 +62,9 @@ const MANAGER_PERMISSIONS = [
     P.SALES_VIEW_PROFIT,
     P.INVENTORY_VIEW,
     P.INVENTORY_MANAGE,
+    P.ORDERS_VIEW,
+    P.ORDERS_CREATE,
+    P.ORDERS_COMPLETE,
     P.EXPENSES_VIEW,
     P.EXPENSES_VIEW_ALL,
     P.EXPENSES_CREATE,
@@ -72,10 +80,13 @@ export const ROLE_PERMISSIONS = {
 
     [ROLES.MANAGER]: MANAGER_PERMISSIONS,
 
-    // Cashier: checkout, own sales, own expenses, loan collection.
+    // Cashier: checkout, own sales, own expenses, loan collection,
+    // preparing supplier orders (a manager completes them).
     // products.view is needed to search items at checkout.
     [ROLES.CASHIER]: [
         P.PRODUCTS_VIEW,
+        P.ORDERS_VIEW,
+        P.ORDERS_CREATE,
         P.SALES_CREATE,
         P.SALES_VIEW,
         P.EXPENSES_VIEW,
@@ -102,6 +113,9 @@ export const MODULES = {
 const PERMISSION_MODULE = {
     [P.INVENTORY_VIEW]: MODULES.INVENTORY,
     [P.INVENTORY_MANAGE]: MODULES.INVENTORY,
+    [P.ORDERS_VIEW]: MODULES.INVENTORY,
+    [P.ORDERS_CREATE]: MODULES.INVENTORY,
+    [P.ORDERS_COMPLETE]: MODULES.INVENTORY,
     [P.EXPENSES_VIEW]: MODULES.EXPENSES,
     [P.EXPENSES_VIEW_ALL]: MODULES.EXPENSES,
     [P.EXPENSES_CREATE]: MODULES.EXPENSES,

@@ -26,6 +26,24 @@ export const can =
         });
     };
 
+/** Route guard: the user must hold AT LEAST ONE of the listed permissions. */
+export const canAny =
+    (...allowed) =>
+    (req, res, next) => {
+        const granted = req.permissions || [];
+
+        if (allowed.some((permission) => granted.includes(permission))) {
+            return next();
+        }
+
+        return res.status(403).json({
+            successful: false,
+            code: "FORBIDDEN",
+            message: "You do not have permission to do this.",
+            missing: allowed,
+        });
+    };
+
 /** True if the request's user holds `permission`. */
 export const has = (req, permission) => (req.permissions || []).includes(permission);
 

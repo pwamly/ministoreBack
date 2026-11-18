@@ -8,7 +8,7 @@ import { Router } from "express";
 import { Op } from "sequelize";
 
 import db from "../../models/index.js";
-import { can } from "../../middleware/auth/authorize.js";
+import { can, canAny } from "../../middleware/auth/authorize.js";
 import { PERMISSIONS } from "../../config/permissions.js";
 import { handler, badRequest, notFound, cleanString, isProvided, pagination, paginationMeta } from "../../utils/http.js";
 
@@ -40,7 +40,8 @@ const pick = (body) => {
 
 router.get(
     "/suppliers",
-    can(PERMISSIONS.INVENTORY_VIEW),
+    // Order creators (e.g. cashiers) pick a supplier on the order form.
+    canAny(PERMISSIONS.INVENTORY_VIEW, PERMISSIONS.ORDERS_VIEW),
     handler(async (req, res) => {
         const page = pagination(req.query, { defaultLimit: 50 });
         const where = { tenantId: req.tenantId };
